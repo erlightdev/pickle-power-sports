@@ -1,0 +1,325 @@
+{
+	"openapi": "3.0.3",
+	"info": {
+		"title": "Pickle Power Sports Backend Smoke Tests",
+		"summary": "Local smoke-test endpoints for EchoAPI Desktop.",
+		"description": "This OpenAPI document is for local API testing in EchoAPI Desktop. When importing, enable EchoAPI's Add host to API paths option or set the request host to http://localhost:3000 manually. Production app code should use the typed tRPC client instead of hand-built URLs.",
+		"version": "0.1.0"
+	},
+	"servers": [
+		{
+			"url": "http://localhost:3000",
+			"description": "Local Hono server"
+		}
+	],
+	"tags": [
+		{
+			"name": "Health"
+		},
+		{
+			"name": "tRPC Public"
+		}
+	],
+	"paths": {
+		"/": {
+			"get": {
+				"operationId": "rootOk",
+				"tags": ["Health"],
+				"summary": "Root OK",
+				"responses": {
+					"200": {
+						"description": "Server is reachable",
+						"content": {
+							"text/plain": {
+								"schema": {
+									"type": "string",
+									"example": "OK"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["Health"],
+				"summary": "Health check",
+				"responses": {
+					"200": {
+						"description": "Process is alive",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusResponse"
+								},
+								"examples": {
+									"ok": {
+										"value": {
+											"status": "ok"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["Health"],
+				"summary": "Readiness check",
+				"description": "Checks that the server can query PostgreSQL.",
+				"responses": {
+					"200": {
+						"description": "Server and database are ready",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusResponse"
+								},
+								"examples": {
+									"ready": {
+										"value": {
+											"status": "ready"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc": {
+			"get": {
+				"operationId": "trpcLocalGuide",
+				"tags": ["tRPC Public"],
+				"summary": "Local tRPC guide",
+				"description": "Development-only helper route. Hidden when NODE_ENV=production.",
+				"responses": {
+					"200": {
+						"description": "Local tRPC usage guide"
+					}
+				}
+			}
+		},
+		"/trpc/healthCheck": {
+			"get": {
+				"operationId": "trpcHealthCheck",
+				"tags": ["tRPC Public"],
+				"summary": "tRPC health check",
+				"responses": {
+					"200": {
+						"description": "tRPC procedure response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc/product.getFilters": {
+			"get": {
+				"operationId": "productGetFilters",
+				"tags": ["tRPC Public"],
+				"summary": "Product filters",
+				"responses": {
+					"200": {
+						"description": "Available product filter metadata",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc/product.list": {
+			"get": {
+				"operationId": "productList",
+				"tags": ["tRPC Public"],
+				"summary": "Product list",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/TrpcInputEmptyObject"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Paginated products",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc/venue.list": {
+			"get": {
+				"operationId": "venueList",
+				"tags": ["tRPC Public"],
+				"summary": "Venue list",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/TrpcInputEmptyObject"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Paginated venues",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc/venue.search": {
+			"get": {
+				"operationId": "venueSearch",
+				"tags": ["tRPC Public"],
+				"summary": "Venue search",
+				"parameters": [
+					{
+						"name": "input",
+						"in": "query",
+						"required": true,
+						"description": "URL-encoded tRPC JSON input. Example decoded value: {\"query\":\"Sydney\"}",
+						"schema": {
+							"type": "string",
+							"default": "{\"query\":\"Sydney\"}"
+						},
+						"example": "{\"query\":\"Sydney\"}"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Venue search results",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc/content.getTestimonials": {
+			"get": {
+				"operationId": "contentGetTestimonials",
+				"tags": ["tRPC Public"],
+				"summary": "Testimonials",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/TrpcInputEmptyObject"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Testimonials",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/trpc/paddleFinder.getRecommendations": {
+			"get": {
+				"operationId": "paddleFinderGetRecommendations",
+				"tags": ["tRPC Public"],
+				"summary": "Paddle finder recommendations",
+				"parameters": [
+					{
+						"name": "input",
+						"in": "query",
+						"required": true,
+						"description": "URL-encoded tRPC JSON input. Example decoded value: {\"skillLevel\":\"BEGINNER\",\"maxBudget\":200}",
+						"schema": {
+							"type": "string",
+							"default": "{\"skillLevel\":\"BEGINNER\",\"maxBudget\":200}"
+						},
+						"example": "{\"skillLevel\":\"BEGINNER\",\"maxBudget\":200}"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Recommended paddles",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TrpcSuccessResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"parameters": {
+			"TrpcInputEmptyObject": {
+				"name": "input",
+				"in": "query",
+				"required": false,
+				"description": "URL-encoded tRPC JSON input. Empty object is encoded as %7B%7D.",
+				"schema": {
+					"type": "string",
+					"default": "{}"
+				},
+				"example": "{}"
+			}
+		},
+		"schemas": {
+			"StatusResponse": {
+				"type": "object",
+				"required": ["status"],
+				"properties": {
+					"status": {
+						"type": "string"
+					}
+				}
+			},
+			"TrpcSuccessResponse": {
+				"type": "object",
+				"required": ["result"],
+				"properties": {
+					"result": {
+						"type": "object",
+						"properties": {
+							"data": {
+								"description": "tRPC procedure result payload"
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

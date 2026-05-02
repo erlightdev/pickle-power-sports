@@ -1,3 +1,41 @@
+# pickle-power-sports
+
+Monorepo for the Pickle Power Sports demo application.
+
+This workspace contains a full-stack TypeScript app (server, web, packages) using tRPC, Prisma, Better Auth, and Vite.
+
+Quick start
+
+1. Start the database:
+
+```bash
+npm run db:start
+```
+
+2. Push Prisma schema and generate client:
+
+```bash
+npm run db:push
+npm run db:generate
+```
+
+3. Start the backend:
+
+```bash
+npm run dev:server
+```
+
+Backend docs start at `docs/backend.md`.
+
+Focused backend guides:
+
+- `docs/local-development.md`
+- `docs/api.md`
+- `docs/auth-rbac.md`
+- `docs/tenancy.md`
+- `docs/database.md`
+- `docs/echoapi.md`
+- `docs/verification.md`
 # Pickle-Power-Sports
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Router, Hono, TRPC, and more.
@@ -29,13 +67,8 @@ npm install
 
 This project uses PostgreSQL with Prisma.
 
-1. Start the local PostgreSQL container:
-
-```bash
-npm run db:start
-```
-
-2. Update your `apps/server/.env` file if your PostgreSQL connection details differ from the local Docker setup.
+1. Make sure you have a PostgreSQL database set up.
+2. Update your `apps/server/.env` file with your PostgreSQL connection details.
 
 3. Apply the schema to your database:
 
@@ -51,10 +84,6 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser to see the web application.
 The API is running at [http://localhost:3000](http://localhost:3000).
-
-## Backend Docs
-
-See [docs/backend.md](docs/backend.md) for the backend reference, including tenant resolution, tRPC routers, example API calls, Prisma model groups, and verification commands.
 
 ## UI Customization
 
@@ -112,3 +141,30 @@ Pickle-Power-Sports/
 - `npm run db:migrate`: Run database migrations
 - `npm run db:studio`: Open database studio UI
 - `npm run check`: Run Biome formatting and linting
+
+ ╭────────────────────────────────────────────────────────────────────╮
+ │                                                                    │
+ │  Next steps                                                        │
+ │  1. cd Projects                                         │
+ │  2. npm install                                                    │
+ │  3. npm run dev                                                    │
+ │  Your project will be available at:                                │
+ │  • Frontend: http://localhost:5173                                 │
+ │  • Backend API: http://localhost:3000                              │
+ │                                                                    │
+ │  Database commands:                                                │
+ │  • Start docker container: npm run db:start                        │
+ │  • Generate Prisma Client: npm run db:generate                     │
+ │  • Apply schema: npm run db:push                                   │
+ │  • Database UI: npm run db:studio                                  │
+ │                                                                    │
+ │  Linting and formatting:                                           │
+ │  • Format and lint fix: npm run check                              │
+ │                                                                    │
+ │  Special sponsors                                                  │
+ │  • neondatabase   • Guillermo Rauch   • Clerk   • Novu   • Convex  │
+ │                                                                    │
+ │  Like Better-T-Stack? Please consider giving us a star             │
+ │     on GitHub:                                                     │
+ │  https://github.com/AmanVarshney01/create-better-t-stack           │
+ │                                                                  

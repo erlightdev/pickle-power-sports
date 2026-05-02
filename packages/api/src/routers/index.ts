@@ -9,6 +9,7 @@ import { orderRouter } from "./order";
 import { paddleFinderRouter } from "./paddle-finder";
 import { productRouter } from "./product";
 import { reviewRouter } from "./review";
+import { tenantRouter } from "./tenant";
 import { tournamentRouter } from "./tournament";
 import { userRouter } from "./user";
 import { venueRouter } from "./venue";
@@ -18,6 +19,7 @@ export const appRouter = router({
 		return "OK";
 	}),
 	auth: authRouter,
+	tenant: tenantRouter,
 	product: productRouter,
 	cart: cartRouter,
 	order: orderRouter,

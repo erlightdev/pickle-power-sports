@@ -1,5 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 
+import { requireTenant, requireTenantAccess } from "./auth/access";
+import type { TenantRoleRequirement } from "./auth/roles";
 import type { Context } from "./context";
 
 export const t = initTRPC.context<Context>().create();
@@ -9,18 +11,12 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 export const tenantProcedure = publicProcedure.use(({ ctx, next }) => {
-	if (!ctx.tenant) {
-		throw new TRPCError({
-			code: "BAD_REQUEST",
-			message: "Tenant not found",
-			cause: "Missing tenant",
-		});
-	}
+	const tenant = requireTenant(ctx);
 
 	return next({
 		ctx: {
 			...ctx,
-			tenant: ctx.tenant,
+			tenant,
 		},
 	});
 });
@@ -42,20 +38,33 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 export const protectedTenantProcedure = protectedProcedure.use(
-	({ ctx, next }) => {
-		if (!ctx.tenant) {
-			throw new TRPCError({
-				code: "BAD_REQUEST",
-				message: "Tenant not found",
-				cause: "Missing tenant",
-			});
-		}
+	async ({ ctx, next }) => {
+		const tenant = requireTenant(ctx);
+		const access = await requireTenantAccess(ctx);
 
 		return next({
 			ctx: {
 				...ctx,
-				tenant: ctx.tenant,
+				tenant,
+				tenantMembership: access.membership,
+				user: access.user,
 			},
 		});
 	},
 );
+
+export function tenantRoleProcedure(allowedRoles: TenantRoleRequirement) {
+	return protectedTenantProcedure.use(({ ctx, next }) => {
+		if (
+			!ctx.tenantMembership.isPlatformAdmin &&
+			!allowedRoles.includes(ctx.tenantMembership.role)
+		) {
+			throw new TRPCError({
+				code: "FORBIDDEN",
+				message: "You do not have permission to perform this tenant action",
+			});
+		}
+
+		return next({ ctx });
+	});
+}

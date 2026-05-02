@@ -5,9 +5,11 @@ import { auth } from "@Pickle-Power-Sports/auth";
 import prisma from "@Pickle-Power-Sports/db";
 import { env } from "@Pickle-Power-Sports/env/server";
 import { trpcServer } from "@hono/trpc-server";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { secureHeaders } from "hono/secure-headers";
 
 type AppVariables = {
 	tenant: TenantContext;
@@ -24,6 +26,7 @@ function tenantNameFromSlug(slug: string) {
 
 async function resolveTenant(
 	hostHeader: string | undefined,
+	tenantSlugHeader: string | undefined,
 ): Promise<TenantContext> {
 	const host = hostHeader?.split(":")[0]?.toLowerCase();
 
@@ -34,11 +37,18 @@ async function resolveTenant(
 	const rootDomain = process.env.ROOT_DOMAIN ?? "picklepowersports.com";
 	const defaultTenantSlug =
 		process.env.DEFAULT_TENANT_SLUG ?? "picklepowersports";
+	const isProduction = process.env.NODE_ENV === "production";
 	const localHosts = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
 	let tenantSlug: string | null = null;
 	let customDomain: string | null = null;
 
-	if (localHosts.has(host) || host.endsWith(".localhost")) {
+	if (
+		!isProduction &&
+		tenantSlugHeader &&
+		(localHosts.has(host) || host.endsWith(".localhost"))
+	) {
+		tenantSlug = tenantSlugHeader.toLowerCase();
+	} else if (localHosts.has(host) || host.endsWith(".localhost")) {
 		tenantSlug = defaultTenantSlug;
 	} else if (host === rootDomain || host === `www.${rootDomain}`) {
 		tenantSlug = defaultTenantSlug;
@@ -53,19 +63,29 @@ async function resolveTenant(
 	}
 
 	if (tenantSlug) {
-		const tenant = await prisma.tenant.upsert({
-			where: { slug: tenantSlug },
-			update: {},
-			create: {
-				name: tenantNameFromSlug(tenantSlug),
-				slug: tenantSlug,
-			},
-		});
+		const tenant =
+			!isProduction && tenantSlug === defaultTenantSlug
+				? await prisma.tenant.upsert({
+						where: { slug: tenantSlug },
+						update: {},
+						create: {
+							name: tenantNameFromSlug(tenantSlug),
+							slug: tenantSlug,
+						},
+					})
+				: await prisma.tenant.findUnique({
+						where: { slug: tenantSlug },
+					});
+
+		if (!tenant || tenant.status !== "ACTIVE") {
+			return null;
+		}
 
 		return {
 			id: tenant.id,
 			name: tenant.name,
 			slug: tenant.slug,
+			status: tenant.status,
 		};
 	}
 
@@ -86,30 +106,39 @@ async function resolveTenant(
 		id: tenantDomain.tenant.id,
 		name: tenantDomain.tenant.name,
 		slug: tenantDomain.tenant.slug,
+		status: tenantDomain.tenant.status,
 	};
 }
 
 app.use(logger());
+app.use(secureHeaders());
 app.use(
 	"/*",
 	cors({
 		origin: env.CORS_ORIGIN,
 		allowMethods: ["GET", "POST", "OPTIONS"],
-		allowHeaders: ["Content-Type", "Authorization"],
+		allowHeaders: ["Content-Type", "Authorization", "X-Tenant-Slug"],
 		credentials: true,
 	}),
 );
 
 app.use("*", async (c, next) => {
-	const tenant = await resolveTenant(c.req.header("host"));
+	const tenant = await resolveTenant(
+		c.req.header("host"),
+		c.req.header("x-tenant-slug"),
+	);
 	c.set("tenant", tenant);
 	await next();
 });
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
-const trpcIndex = (c: { json: (body: unknown) => Response }) =>
-	c.json({
+const trpcIndex = (c: Context) => {
+	if (process.env.NODE_ENV === "production") {
+		return c.notFound();
+	}
+
+	return c.json({
 		message: "Pickle Power Sports tRPC API",
 		usage: "Call a procedure path under /trpc, for example /trpc/healthCheck",
 		examples: [
@@ -120,6 +149,7 @@ const trpcIndex = (c: { json: (body: unknown) => Response }) =>
 			"/trpc/content.getTestimonials?input=%7B%7D",
 		],
 	});
+};
 
 app.get("/trpc", trpcIndex);
 app.get("/trpc/", trpcIndex);
@@ -136,6 +166,15 @@ app.use(
 
 app.get("/", (c) => {
 	return c.text("OK");
+});
+
+app.get("/healthz", (c) => {
+	return c.json({ status: "ok" });
+});
+
+app.get("/readyz", async (c) => {
+	await prisma.$queryRaw`SELECT 1`;
+	return c.json({ status: "ready" });
 });
 
 import { serve } from "@hono/node-server";
