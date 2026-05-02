@@ -1,10 +1,916 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated"
+  provider     = "prisma-client"
+  output       = "../generated"
   moduleFormat = "esm"
-  runtime = "nodejs"
+  runtime      = "nodejs"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum DomainType {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  COACH
+  STAFF
+  MEMBER
+}
+
+enum UserRole {
+  CUSTOMER
+  COACH
+  ADMIN
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  PRO
+  COACH
+}
+
+enum CartStatus {
+  ACTIVE
+  CONVERTED
+  ABANDONED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum FulfillmentStatus {
+  UNFULFILLED
+  PARTIAL
+  FULFILLED
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum CourtType {
+  INDOOR
+  OUTDOOR
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ClassType {
+  COURSE
+  DROP_IN
+  PRIVATE
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  CANCELLED
+  ATTENDED
+  NO_SHOW
+}
+
+enum TournamentFormat {
+  SINGLES
+  DOUBLES
+  MIXED_DOUBLES
+  MIXER
+}
+
+enum TournamentStatus {
+  UPCOMING
+  OPEN
+  WAITLIST
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  WAITLIST
+  CANCELLED
+}
+
+enum ArticleType {
+  REVIEW
+  COMPARISON
+  GUIDE
+  TECHNIQUE
+  NEWS
+}
+
+enum ClubTransactionType {
+  CASHBACK
+  PAYOUT
+}
+
+enum ClubTransactionStatus {
+  PENDING
+  PAID
+}
+
+model Tenant {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  status        TenantStatus @default(ACTIVE)
+  primaryDomain String?      @unique
+  logoUrl       String?
+  brandColor    String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  domains                 TenantDomain[]
+  members                 TenantMember[]
+  categories              Category[]
+  brands                  Brand[]
+  products                Product[]
+  productTags             ProductTag[]
+  carts                   Cart[]
+  orders                  Order[]
+  venues                  Venue[]
+  courts                  Court[]
+  venueAvailability       VenueAvailability[]
+  courtBookings           CourtBooking[]
+  coaches                 Coach[]
+  classes                 TrainingClass[]
+  classSessions           ClassSession[]
+  classEnrollments        ClassEnrollment[]
+  tournaments             Tournament[]
+  tournamentRegistrations TournamentRegistration[]
+  reviews                 Review[]
+  staffPicks              StaffPick[]
+  articles                Article[]
+  clubs                   Club[]
+  clubTransactions        ClubTransaction[]
+  newsletterSubscribers   NewsletterSubscriber[]
+  testimonials            Testimonial[]
+  paddleFinderSubmissions PaddleFinderSubmission[]
+
+  @@map("tenant")
+}
+
+model TenantDomain {
+  id        String     @id @default(cuid())
+  tenantId  String
+  domain    String     @unique
+  type      DomainType
+  verified  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_domain")
+}
+
+model TenantMember {
+  id        String     @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      TenantRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@map("tenant_member")
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  tenantId     String
+  slug         String
+  name         String
+  description  String?
+  imageUrl     String?
+  productCount Int      @default(0)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("category")
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  tenantId    String
+  slug        String
+  name        String
+  logoUrl     String?
+  description String?
+  website     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("brand")
+}
+
+model Product {
+  id              String      @id @default(cuid())
+  tenantId        String
+  slug            String
+  sku             String?
+  name            String
+  brandId         String?
+  categoryId      String?
+  description     String?
+  price           Decimal     @db.Decimal(10, 2)
+  compareAtPrice  Decimal?    @db.Decimal(10, 2)
+  stockQuantity   Int         @default(0)
+  isInStock       Boolean     @default(true)
+  isFeatured      Boolean     @default(false)
+  isOnSale        Boolean     @default(false)
+  salePercentage  Int         @default(0)
+  skillLevel      SkillLevel?
+  weight          Decimal?    @db.Decimal(5, 2)
+  thickness       Decimal?    @db.Decimal(4, 1)
+  surfaceMaterial String?
+  coreMaterial    String?
+  gripSize        String?
+  handleLength    Decimal?    @db.Decimal(4, 1)
+  shape           String?
+  usapaApproved   Boolean     @default(false)
+  paApproved      Boolean     @default(false)
+  demoEligible    Boolean     @default(true)
+  rating          Decimal     @default(0) @db.Decimal(2, 1)
+  reviewCount     Int         @default(0)
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brand         Brand?               @relation(fields: [brandId], references: [id])
+  category      Category?            @relation(fields: [categoryId], references: [id])
+  images        ProductImage[]
+  tags          ProductTagRelation[]
+  cartItems     CartItem[]
+  wishlistItems Wishlist[]
+  orderItems    OrderItem[]
+  reviews       Review[]
+  staffPicks    StaffPick[]
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([brandId])
+  @@map("product")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_image")
+}
+
+model ProductTag {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products ProductTagRelation[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("product_tag")
+}
+
+model ProductTagRelation {
+  productId String
+  tagId     String
+
+  product Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     ProductTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@map("product_tag_relation")
+}
+
+model Cart {
+  id             String     @id @default(cuid())
+  tenantId       String
+  userId         String?
+  sessionId      String?
+  status         CartStatus @default(ACTIVE)
+  totalItems     Int        @default(0)
+  subtotal       Decimal    @default(0) @db.Decimal(10, 2)
+  promoCode      String?
+  discountAmount Decimal    @default(0) @db.Decimal(10, 2)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
+
+  @@index([tenantId])
+  @@index([tenantId, userId, status])
+  @@index([tenantId, sessionId, status])
+  @@map("cart")
+}
+
+model CartItem {
+  id         String  @id @default(cuid())
+  cartId     String
+  productId  String
+  quantity   Int     @default(1)
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(10, 2)
+  isDemoItem Boolean @default(false)
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId, isDemoItem])
+  @@index([productId])
+  @@map("cart_item")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, productId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("wishlist")
+}
+
+model Order {
+  id                String            @id @default(cuid())
+  tenantId          String
+  orderNumber       String
+  userId            String
+  status            OrderStatus       @default(PENDING)
+  paymentStatus     PaymentStatus     @default(PENDING)
+  fulfillmentStatus FulfillmentStatus @default(UNFULFILLED)
+  currency          String            @default("AUD")
+  subtotal          Decimal           @db.Decimal(10, 2)
+  shippingCost      Decimal           @default(0) @db.Decimal(10, 2)
+  discountAmount    Decimal           @default(0) @db.Decimal(10, 2)
+  taxAmount         Decimal           @default(0) @db.Decimal(10, 2)
+  total             Decimal           @db.Decimal(10, 2)
+  shippingAddress   Json?
+  billingAddress    Json?
+  trackingNumber    String?
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id])
+  items            OrderItem[]
+  payments         Payment[]
+  clubTransactions ClubTransaction[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("order")
+}
+
+model OrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(10, 2)
+  isDemoItem Boolean @default(false)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_item")
+}
+
+model Payment {
+  id                    String              @id @default(cuid())
+  orderId               String
+  stripePaymentIntentId String?
+  amount                Decimal             @db.Decimal(10, 2)
+  currency              String              @default("AUD")
+  status                PaymentRecordStatus @default(PENDING)
+  paymentMethod         String?
+  paidAt                DateTime?
+  createdAt             DateTime            @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("payment")
+}
+
+model Venue {
+  id                String   @id @default(cuid())
+  tenantId          String
+  slug              String
+  name              String
+  address           String?
+  city              String?
+  state             String?
+  postcode          String?
+  latitude          Decimal? @db.Decimal(10, 8)
+  longitude         Decimal? @db.Decimal(11, 8)
+  phone             String?
+  email             String?
+  description       String?
+  rating            Decimal  @default(0) @db.Decimal(2, 1)
+  reviewCount       Int      @default(0)
+  totalCourts       Int      @default(0)
+  indoorCourts      Int      @default(0)
+  outdoorCourts     Int      @default(0)
+  hasLights         Boolean  @default(false)
+  hasProShop        Boolean  @default(false)
+  hasFreeParking    Boolean  @default(false)
+  hasShowers        Boolean  @default(false)
+  hasLockerRooms    Boolean  @default(false)
+  hasClimateControl Boolean  @default(false)
+  isPartner         Boolean  @default(false)
+  images            Json?
+  amenities         Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  courts        Court[]
+  classes       TrainingClass[]
+  classSessions ClassSession[]
+  tournaments   Tournament[]
+  reviews       Review[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("venue")
+}
+
+model Court {
+  id               String    @id @default(cuid())
+  tenantId         String
+  venueId          String
+  name             String
+  type             CourtType @default(OUTDOOR)
+  surfaceType      String?
+  isActive         Boolean   @default(true)
+  hourlyRate       Decimal   @db.Decimal(6, 2)
+  memberHourlyRate Decimal?  @db.Decimal(6, 2)
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venue         Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  bookings      CourtBooking[]
+  availability  VenueAvailability[]
+  classSessions ClassSession[]
+
+  @@index([tenantId])
+  @@index([venueId])
+  @@map("court")
+}
+
+model CourtBooking {
+  id                 String        @id @default(cuid())
+  tenantId           String
+  courtId            String
+  userId             String
+  bookingDate        DateTime
+  startTime          DateTime
+  endTime            DateTime
+  durationMinutes    Int
+  totalPrice         Decimal       @db.Decimal(10, 2)
+  status             BookingStatus @default(CONFIRMED)
+  cancellationReason String?
+  cancelledAt        DateTime?
+  isMemberBooking    Boolean       @default(false)
+  guestCount         Int           @default(1)
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  court  Court  @relation(fields: [courtId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([courtId, startTime, endTime])
+  @@index([userId])
+  @@map("court_booking")
+}
+
+model VenueAvailability {
+  id          String  @id @default(cuid())
+  tenantId    String
+  courtId     String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  isAvailable Boolean @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  court  Court  @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([courtId, dayOfWeek])
+  @@map("venue_availability")
+}
+
+model Coach {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String?  @unique
+  name           String
+  slug           String
+  bio            String?
+  avatarUrl      String?
+  duprRating     Decimal? @db.Decimal(3, 1)
+  certifications Json?
+  specialties    Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User?           @relation(fields: [userId], references: [id])
+  classes TrainingClass[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("coach")
+}
+
+model TrainingClass {
+  id              String     @id @default(cuid())
+  tenantId        String
+  slug            String
+  title           String
+  description     String?
+  skillLevel      SkillLevel
+  type            ClassType
+  coachId         String?
+  venueId         String?
+  maxGroupSize    Int        @default(6)
+  durationMinutes Int
+  totalSessions   Int        @default(1)
+  pricePerSession Decimal    @db.Decimal(6, 2)
+  memberDiscount  Decimal    @default(5) @db.Decimal(4, 2)
+  isActive        Boolean    @default(true)
+  imageUrl        String?
+  tags            Json?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  coach    Coach?         @relation(fields: [coachId], references: [id])
+  venue    Venue?         @relation(fields: [venueId], references: [id])
+  sessions ClassSession[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([coachId])
+  @@index([venueId])
+  @@map("training_class")
+}
+
+model ClassSession {
+  id             String   @id @default(cuid())
+  tenantId       String
+  classId        String
+  startTime      DateTime
+  endTime        DateTime
+  venueId        String?
+  courtId        String?
+  spotsTotal     Int
+  spotsRemaining Int
+  isCancelled    Boolean  @default(false)
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class       TrainingClass     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  venue       Venue?            @relation(fields: [venueId], references: [id])
+  court       Court?            @relation(fields: [courtId], references: [id])
+  enrollments ClassEnrollment[]
+
+  @@index([tenantId])
+  @@index([classId, startTime])
+  @@map("class_session")
+}
+
+model ClassEnrollment {
+  id         String           @id @default(cuid())
+  tenantId   String
+  sessionId  String
+  userId     String
+  status     EnrollmentStatus @default(ENROLLED)
+  pricePaid  Decimal          @db.Decimal(6, 2)
+  isMember   Boolean          @default(false)
+  enrolledAt DateTime         @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  session ClassSession @relation(fields: [sessionId], references: [id])
+  user    User         @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, sessionId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("class_enrollment")
+}
+
+model Tournament {
+  id                    String           @id @default(cuid())
+  tenantId              String
+  slug                  String
+  name                  String
+  description           String?
+  venueId               String?
+  startDate             DateTime
+  endDate               DateTime
+  registrationOpenDate  DateTime?
+  registrationCloseDate DateTime?
+  format                TournamentFormat
+  levels                Json?
+  entryFee              Decimal          @db.Decimal(6, 2)
+  prizePool             Decimal?         @db.Decimal(10, 2)
+  maxParticipants       Int?
+  spotsRemaining        Int?
+  isDUPRRated           Boolean          @default(false)
+  isSanctioned          Boolean          @default(false)
+  isFeatured            Boolean          @default(false)
+  status                TournamentStatus @default(UPCOMING)
+  imageUrl              String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  tenant        Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venue         Venue?                   @relation(fields: [venueId], references: [id])
+  registrations TournamentRegistration[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([venueId])
+  @@map("tournament")
+}
+
+model TournamentRegistration {
+  id            String             @id @default(cuid())
+  tenantId      String
+  tournamentId  String
+  userId        String
+  partnerId     String?
+  status        RegistrationStatus @default(PENDING)
+  skillLevel    String?
+  duprRating    Decimal?           @db.Decimal(3, 1)
+  entryFeePaid  Decimal?           @db.Decimal(6, 2)
+  paymentStatus PaymentStatus      @default(PENDING)
+  registeredAt  DateTime           @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation("TournamentPlayer", fields: [userId], references: [id])
+  partner    User?      @relation("TournamentPartner", fields: [partnerId], references: [id])
+
+  @@unique([tenantId, tournamentId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tournament_registration")
+}
+
+model Review {
+  id               String   @id @default(cuid())
+  tenantId         String
+  productId        String?
+  venueId          String?
+  userId           String?
+  authorName       String?
+  authorAvatar     String?
+  rating           Int
+  title            String?
+  content          String?
+  verifiedPurchase Boolean  @default(false)
+  duprRating       Decimal? @db.Decimal(3, 1)
+  helpfulCount     Int      @default(0)
+  isApproved       Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  venue   Venue?   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([productId])
+  @@index([venueId])
+  @@map("review")
+}
+
+model StaffPick {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  staffName   String
+  staffRole   String?
+  staffAvatar String?
+  staffDupr   Decimal? @db.Decimal(3, 1)
+  quote       String
+  monthYear   String
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([productId])
+  @@map("staff_pick")
+}
+
+model Article {
+  id              String      @id @default(cuid())
+  tenantId        String
+  slug            String
+  title           String
+  subtitle        String?
+  type            ArticleType
+  authorId        String?
+  authorName      String?
+  authorAvatar    String?
+  authorDupr      Decimal?    @db.Decimal(3, 1)
+  content         String?
+  excerpt         String?
+  readTimeMinutes Int?
+  featuredImage   String?
+  isFeatured      Boolean     @default(false)
+  publishedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id])
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([authorId])
+  @@map("article")
+}
+
+model Club {
+  id              String   @id @default(cuid())
+  tenantId        String
+  slug            String
+  name            String
+  code            String
+  location        String?
+  memberCount     Int      @default(0)
+  discountPercent Decimal  @default(7) @db.Decimal(4, 2)
+  cashbackPercent Decimal  @default(7) @db.Decimal(4, 2)
+  totalEarned     Decimal  @default(0) @db.Decimal(10, 2)
+  isActive        Boolean  @default(true)
+  logoUrl         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions ClubTransaction[]
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("club")
+}
+
+model ClubTransaction {
+  id        String                @id @default(cuid())
+  tenantId  String
+  clubId    String
+  userId    String
+  orderId   String?
+  amount    Decimal               @db.Decimal(10, 2)
+  type      ClubTransactionType   @default(CASHBACK)
+  status    ClubTransactionStatus @default(PENDING)
+  createdAt DateTime              @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  club   Club   @relation(fields: [clubId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  order  Order? @relation(fields: [orderId], references: [id])
+
+  @@index([tenantId])
+  @@index([clubId])
+  @@index([userId])
+  @@map("club_transaction")
+}
+
+model NewsletterSubscriber {
+  id           String      @id @default(cuid())
+  tenantId     String
+  email        String
+  skillLevel   SkillLevel?
+  isActive     Boolean     @default(true)
+  subscribedAt DateTime    @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("newsletter_subscriber")
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  role      String?
+  quote     String
+  avatarUrl String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("testimonial")
+}
+
+model PaddleFinderSubmission {
+  id              String      @id @default(cuid())
+  tenantId        String
+  userId          String?
+  email           String?
+  skillLevel      SkillLevel?
+  playStyle       String?
+  preferredWeight String?
+  maxBudget       Decimal?    @db.Decimal(10, 2)
+  answers         Json
+  recommendations Json?
+  createdAt       DateTime    @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("paddle_finder_submission")
 }

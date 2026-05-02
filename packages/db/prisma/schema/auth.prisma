@@ -1,13 +1,32 @@
 model User {
-  id            String    @id
+  id            String      @id
   name          String
   email         String
-  emailVerified Boolean   @default(false)
+  emailVerified Boolean     @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  phone         String?
+  duprRating    Decimal?    @db.Decimal(3, 1)
+  skillLevel    SkillLevel?
+  role          UserRole    @default(CUSTOMER)
+  preferences   Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   sessions      Session[]
   accounts      Account[]
+
+  tenantMemberships              TenantMember[]
+  carts                          Cart[]
+  orders                         Order[]
+  wishlists                      Wishlist[]
+  courtBookings                  CourtBooking[]
+  coachProfile                   Coach?
+  classEnrollments               ClassEnrollment[]
+  tournamentRegistrations        TournamentRegistration[] @relation("TournamentPlayer")
+  partnerTournamentRegistrations TournamentRegistration[] @relation("TournamentPartner")
+  reviews                        Review[]
+  articles                       Article[]
+  clubTransactions               ClubTransaction[]
+  paddleFinderSubmissions        PaddleFinderSubmission[]
 
   @@unique([email])
   @@map("user")
