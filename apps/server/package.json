@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc -b",
+    "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "@Pickle-Power-Sports/api": "*",
+    "@Pickle-Power-Sports/auth": "*",
+    "@Pickle-Power-Sports/db": "*",
+    "@Pickle-Power-Sports/env": "*",
+    "@hono/node-server": "^1.14.4",
+    "@hono/trpc-server": "^0.4.0",
+    "@trpc/server": "^11.16.0",
+    "better-auth": "1.6.9",
+    "dotenv": "^17.2.2",
+    "hono": "^4.8.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@Pickle-Power-Sports/config": "*",
+    "@types/node": "^22.13.14",
+    "tsdown": "^0.21.9",
+    "tsx": "^4.19.2",
+    "typescript": "^6"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@Pickle-Power-Sports/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@Pickle-Power-Sports/db": "*",
+    "@Pickle-Power-Sports/env": "*",
+    "better-auth": "1.6.9",
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@Pickle-Power-Sports/config": "*",
+    "typescript": "^6"
+  }
+}

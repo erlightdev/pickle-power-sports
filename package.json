@@ -1,0 +1,38 @@
+{
+  "name": "Pickle-Power-Sports",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @Pickle-Power-Sports/db db:push",
+    "db:studio": "turbo -F @Pickle-Power-Sports/db db:studio",
+    "db:generate": "turbo -F @Pickle-Power-Sports/db db:generate",
+    "db:migrate": "turbo -F @Pickle-Power-Sports/db db:migrate",
+    "db:start": "turbo -F @Pickle-Power-Sports/db db:start",
+    "db:watch": "turbo -F @Pickle-Power-Sports/db db:watch",
+    "db:stop": "turbo -F @Pickle-Power-Sports/db db:stop",
+    "db:down": "turbo -F @Pickle-Power-Sports/db db:down",
+    "check": "biome check --write ."
+  },
+  "dependencies": {
+    "@Pickle-Power-Sports/env": "*",
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@Pickle-Power-Sports/config": "*",
+    "@biomejs/biome": "^2.2.0",
+    "@types/node": "^22.13.14",
+    "turbo": "^2.8.12",
+    "typescript": "^6"
+  },
+  "packageManager": "npm@11.4.2"
+}

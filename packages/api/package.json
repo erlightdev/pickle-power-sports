@@ -1,0 +1,27 @@
+{
+  "name": "@Pickle-Power-Sports/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@Pickle-Power-Sports/auth": "*",
+    "@Pickle-Power-Sports/db": "*",
+    "@Pickle-Power-Sports/env": "*",
+    "@trpc/client": "^11.16.0",
+    "@trpc/server": "^11.16.0",
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@Pickle-Power-Sports/config": "*",
+    "hono": "^4.8.2",
+    "typescript": "^6"
+  }
+}

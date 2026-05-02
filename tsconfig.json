@@ -1,0 +1,3 @@
+{
+  "extends": "@Pickle-Power-Sports/config/tsconfig.base.json"
+}
