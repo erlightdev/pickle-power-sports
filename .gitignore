@@ -1,3 +1,42 @@
+# Node
+node_modules/
+dist/
+build/
+/.turbo
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.*.local
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Next / Vite
+.next/
+.parcel-cache/
+/.vite
+
+# Misc
+.cache/
+coverage/
+/.pnp*
+*.tgz
 # Dependencies
 node_modules
 .pnp

@@ -29,8 +29,13 @@ npm install
 
 This project uses PostgreSQL with Prisma.
 
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
+1. Start the local PostgreSQL container:
+
+```bash
+npm run db:start
+```
+
+2. Update your `apps/server/.env` file if your PostgreSQL connection details differ from the local Docker setup.
 
 3. Apply the schema to your database:
 
@@ -46,6 +51,10 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser to see the web application.
 The API is running at [http://localhost:3000](http://localhost:3000).
+
+## Backend Docs
+
+See [docs/backend.md](docs/backend.md) for the backend reference, including tenant resolution, tRPC routers, example API calls, Prisma model groups, and verification commands.
 
 ## UI Customization
 
