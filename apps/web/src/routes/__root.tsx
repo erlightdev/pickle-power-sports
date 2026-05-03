@@ -50,6 +50,7 @@ function RootComponent() {
 		location.pathname.startsWith("/profile") ||
 		location.pathname.startsWith("/login") ||
 		location.pathname.startsWith("/register") ||
+		location.pathname.startsWith("/tenant-unavailable") ||
 		location.pathname.startsWith("/forgot-password") ||
 		location.pathname.startsWith("/reset-password");
 

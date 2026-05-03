@@ -62,7 +62,9 @@ Important columns:
 
 ## Members Section
 
-The Members section shows all registered users, including users who do not yet have access to the current tenant.
+Tenant owners and tenant admins only see users attached to their tenant. They do not see the global user list.
+
+Platform admins can see all registered users and assign tenant access from the global list.
 
 For each user, admins can:
 
@@ -100,6 +102,8 @@ Tenant roles are stored on `tenant_member.role`:
 
 Safety rules:
 
+- Tenant owners/admins can only list current tenant members.
+- Platform admins can list all registered users.
 - Only tenant owners can assign `OWNER`.
 - A tenant must always keep at least one owner.
 - Users cannot remove their own tenant membership.
@@ -107,9 +111,9 @@ Safety rules:
 
 ## First User Bootstrap
 
-When a user registers from a tenant subdomain, the web app calls `tenant.joinCurrent` after email verification.
+When a user registers from an existing tenant subdomain, the web app calls `tenant.joinCurrent` after email verification.
 
-If the tenant has no members yet:
+If the tenant/domain already exists and the tenant has no members yet:
 
 - The tenant membership row is created.
 - The registering user becomes `OWNER`.
@@ -119,28 +123,30 @@ If the tenant already has members:
 - New users are not auto-promoted.
 - Tenant access remains invite-only through the Members section.
 
-In local development, `*.localhost` hosts resolve to tenant slugs. For example:
+System admins create subdomains from the system tenant. Creating a subdomain creates a new tenant with no members and stores a matching domain row. The first user who registers on that subdomain becomes the tenant `OWNER`.
+
+In local development, `*.localhost` hosts resolve only when a matching domain row exists. For example:
 
 ```text
 club.localhost
 ```
 
-uses the tenant slug:
+must exist in the Domains table as:
 
 ```text
-club
+club.localhost
 ```
 
-In production, subdomain bootstrap requires `ROOT_DOMAIN` so a host like:
+In production, subdomain access requires `ROOT_DOMAIN` and a saved domain row, so a host like:
 
 ```text
 club.yourdomain.com
 ```
 
-can resolve the tenant slug:
+must exist in the Domains table as:
 
 ```text
-club
+club.yourdomain.com
 ```
 
 ## Domains Section
@@ -152,13 +158,13 @@ Admins can:
 - Add a subdomain
 - Add a custom domain
 - View verification status
-- Remove a domain
+- Delete a domain tenant and its tenant-scoped data
 
 API procedures:
 
 - `tenant.settings`
 - `tenant.addDomain`
-- `tenant.removeDomain`
+- `tenant.deleteTenantForDomain`
 
 Relevant database table:
 
@@ -214,6 +220,18 @@ Status labels:
 - `Verified`: DNS verification has been marked true.
 - `Pending`: production/custom domain has not been verified yet.
 
+Deleting a domain from the Domains table is destructive. It deletes the current tenant row, which cascades tenant-scoped records such as members, products, orders, venues, classes, tournaments, content, and domain rows.
+
+User accounts are not deleted because a user can belong to multiple tenants. The UI requires typing the exact domain before the delete mutation runs.
+
+In local development, Vite may still serve the React app shell at a deleted host such as:
+
+```text
+http://club.localhost:3001
+```
+
+That does not mean the tenant still exists. The backend no longer auto-creates tenants while resolving local subdomain requests. Tenant-scoped auth and tRPC requests return `Tenant not found` for deleted subdomains, and the web app redirects missing subdomains back to the main system domain.
+
 ## Local Domain Testing
 
 The default local app URLs are:
@@ -223,13 +241,13 @@ http://localhost:3001
 http://localhost:3000
 ```
 
-The server can resolve local tenant subdomains like:
+The server can resolve local tenant subdomains only when a matching domain row exists, like:
 
 ```text
 tenant-slug.localhost
 ```
 
-Saved domain mappings are checked before the local tenant-slug fallback, so a saved `club.localhost` domain resolves to the tenant that owns that domain.
+Saved domain mappings are required for local subdomains, so a saved `club.localhost` domain resolves to the tenant that owns that domain. A never-created or deleted subdomain redirects back to `localhost`.
 
 For browser testing, the frontend and backend origins must match your local subdomain setup. For example, to test `club.localhost`, use matching local env values:
 

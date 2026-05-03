@@ -10,16 +10,18 @@ Tenant resolution happens in `apps/server/src/index.ts`.
 - The default tenant slug is `picklepowersports`.
 - You can override it with `DEFAULT_TENANT_SLUG`.
 - Production subdomains require `ROOT_DOMAIN`.
-- Subdomains resolve from the host, such as `rallypoint.yourdomain.com`.
+- Subdomains resolve from an explicit `tenant_domain` row, such as `rallypoint.yourdomain.com`.
 - Custom domains resolve through the `tenant_domain` table.
 - In local development only, `X-Tenant-Slug` can select a tenant while using `localhost`.
-- In production, tenants are never auto-created from hostnames. The tenant must already exist and have `ACTIVE` status.
+- Tenants are not auto-created during normal host resolution. The tenant must already exist and have `ACTIVE` status.
 
 ## Local Tenant Behavior
 
-On local root requests, the server upserts the default tenant automatically. On `*.localhost` requests, the subdomain is treated as the tenant slug. This makes subdomain testing work locally.
+On local root requests, the server resolves the default tenant slug. On `*.localhost` requests, the subdomain must match a domain row created by an owner/admin. This makes local subdomain testing explicit and prevents deleted or never-created subdomains from becoming accessible.
 
-Non-default tenants must be created explicitly.
+Non-default tenants must be created explicitly by a system admin. Creating a subdomain creates the tenant and its `tenant_domain` row first; the first registration on that subdomain claims owner access for that tenant.
+
+If a tenant is deleted, the React dev server may still serve the app shell at the old `*.localhost:3001` URL, but the server rejects tenant-scoped auth and tRPC requests for that host. The web app redirects missing subdomains back to the main system domain.
 
 ## Production Tenant Rules
 

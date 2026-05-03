@@ -33,11 +33,13 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { authClient } from "@/lib/auth-client";
+import { requireResolvedTenant } from "@/lib/tenant-guard";
 import { trpc } from "@/utils/trpc";
 
 export const Route = createFileRoute("/dashboard")({
 	component: RouteComponent,
 	beforeLoad: async () => {
+		await requireResolvedTenant();
 		const session = await authClient.getSession();
 		if (!session.data) {
 			redirect({

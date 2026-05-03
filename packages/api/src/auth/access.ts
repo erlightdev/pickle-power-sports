@@ -102,7 +102,7 @@ export async function requireTenantAccess(ctx: Context): Promise<TenantAccess> {
 					tenantId: membership.tenantId,
 					userId: membership.userId,
 					role: membership.role as TenantRole,
-					isPlatformAdmin: false,
+					isPlatformAdmin: platformAdmin,
 				}
 			: {
 					id: null,

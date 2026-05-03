@@ -17,13 +17,6 @@ type AppVariables = {
 
 const app = new Hono<{ Variables: AppVariables }>();
 
-function tenantNameFromSlug(slug: string) {
-	return slug
-		.split("-")
-		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-		.join(" ");
-}
-
 function rootDomain() {
 	return process.env.ROOT_DOMAIN ?? (process.env.NODE_ENV === "production" ? null : "localhost");
 }
@@ -51,6 +44,52 @@ function isAllowedCorsOrigin(origin: string | undefined) {
 	} catch {
 		return false;
 	}
+}
+
+function hostnameFromUrl(url: string) {
+	try {
+		return new URL(url).hostname.toLowerCase();
+	} catch {
+		return null;
+	}
+}
+
+function isTenantScopedHost(hostHeader: string | undefined) {
+	const host = hostHeader?.split(":")[0]?.toLowerCase();
+
+	if (!host) {
+		return false;
+	}
+
+	const serviceHosts = new Set(
+		[hostnameFromUrl(env.BETTER_AUTH_URL), hostnameFromUrl(env.CORS_ORIGIN)]
+			.filter((hostname): hostname is string => Boolean(hostname))
+	);
+	const localHosts = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+
+	if (localHosts.has(host) || serviceHosts.has(host)) {
+		return false;
+	}
+
+	if (env.NODE_ENV !== "production" && host.endsWith(".localhost")) {
+		return true;
+	}
+
+	const appRootDomain = rootDomain();
+
+	if (appRootDomain && (host === appRootDomain || host === `www.${appRootDomain}`)) {
+		return false;
+	}
+
+	if (appRootDomain && host.endsWith(`.${appRootDomain}`)) {
+		return true;
+	}
+
+	return true;
+}
+
+function isMissingTenantHost(c: Context<{ Variables: AppVariables }>) {
+	return isTenantScopedHost(c.req.header("host")) && !c.get("tenant");
 }
 
 async function resolveTenantDomain(host: string): Promise<TenantContext> {
@@ -97,17 +136,13 @@ async function resolveTenant(
 	if (
 		!isProduction &&
 		tenantSlugHeader &&
-		(localHosts.has(host) || host.endsWith(".localhost"))
+		localHosts.has(host)
 	) {
 		tenantSlug = tenantSlugHeader.toLowerCase();
 	} else if (localHosts.has(host)) {
 		tenantSlug = defaultTenantSlug;
-	} else if (!isProduction && host.endsWith(".localhost")) {
-		tenantSlug = host.replace(".localhost", "");
 	} else if (appRootDomain && (host === appRootDomain || host === `www.${appRootDomain}`)) {
 		tenantSlug = defaultTenantSlug;
-	} else if (appRootDomain && host.endsWith(`.${appRootDomain}`)) {
-		tenantSlug = host.replace(`.${appRootDomain}`, "");
 	} else {
 		customDomain = host;
 	}
@@ -118,12 +153,12 @@ async function resolveTenant(
 
 	if (tenantSlug) {
 		const tenant =
-			!isProduction
+			!isProduction && tenantSlug === defaultTenantSlug
 				? await prisma.tenant.upsert({
 						where: { slug: tenantSlug },
 						update: {},
 						create: {
-							name: tenantNameFromSlug(tenantSlug),
+							name: "Pickle Power Sports",
 							slug: tenantSlug,
 						},
 					})
@@ -171,7 +206,13 @@ app.use("*", async (c, next) => {
 	await next();
 });
 
-app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+	if (isMissingTenantHost(c)) {
+		return c.json({ error: "Tenant not found" }, 404);
+	}
+
+	return auth.handler(c.req.raw);
+});
 
 app.post("/api/change-email", async (c) => {
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
@@ -233,6 +274,14 @@ const trpcIndex = (c: Context) => {
 
 app.get("/trpc", trpcIndex);
 app.get("/trpc/", trpcIndex);
+
+app.use("/trpc/*", async (c, next) => {
+	if (isMissingTenantHost(c)) {
+		return c.json({ error: "Tenant not found" }, 404);
+	}
+
+	await next();
+});
 
 app.use(
 	"/trpc/*",

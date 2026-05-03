@@ -71,10 +71,17 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
 			toast.error(error.message || "Invalid or expired code")
 			setIsLoading(false)
 		} else {
+			const signInResult = await authClient.signIn.email({ email, password })
+			if (signInResult.error) {
+				toast.error(signInResult.error.message || "Verified, but sign in failed")
+				setIsLoading(false)
+				return
+			}
+
 			try {
 				await trpcClient.tenant.joinCurrent.mutate()
-			} catch {
-				// Existing tenants are invite-only after the first owner is created.
+			} catch (joinError) {
+				console.warn("Tenant bootstrap skipped", joinError)
 			}
 			toast.success("Email verified — welcome!")
 			navigate({ to: "/dashboard" })

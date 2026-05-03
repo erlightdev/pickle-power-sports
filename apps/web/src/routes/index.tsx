@@ -1,10 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { isTenantHost, requireResolvedTenant } from "@/lib/tenant-guard";
 import { trpc } from "@/utils/trpc";
 
 export const Route = createFileRoute("/")({
 	component: HomeComponent,
+	beforeLoad: async () => {
+		if (!isTenantHost()) {
+			return;
+		}
+
+		await requireResolvedTenant();
+	},
 });
 
 const TITLE_TEXT = `

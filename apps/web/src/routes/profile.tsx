@@ -22,10 +22,12 @@ import { toast } from "sonner"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ModeToggle } from "@/components/mode-toggle"
 import { authClient } from "@/lib/auth-client"
+import { requireResolvedTenant } from "@/lib/tenant-guard"
 
 export const Route = createFileRoute("/profile")({
 	component: ProfilePage,
 	beforeLoad: async () => {
+		await requireResolvedTenant()
 		const session = await authClient.getSession()
 		if (!session.data) {
 			redirect({ to: "/login", throw: true })
@@ -108,9 +110,10 @@ function SectionHeader({ title, description }: { title: string; description?: st
 function ProfilePage() {
 	const { session } = Route.useRouteContext()
 	const router = useRouter()
-	const user = session.data?.user as
-		| (typeof session.data.user & { username?: string; phone?: string })
+	type ProfileUser =
+		| (NonNullable<typeof session.data>["user"] & { username?: string; phone?: string })
 		| undefined
+	const user = session.data?.user as ProfileUser
 
 	const [activeTab, setActiveTab] = useState<NavTab>("account")
 	const [editing, setEditing] = useState<EditingField>(null)

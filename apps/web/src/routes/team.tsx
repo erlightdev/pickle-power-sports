@@ -21,6 +21,7 @@ import {
 	SidebarTrigger,
 } from "@Pickle-Power-Sports/ui/components/sidebar";
 import { cn } from "@Pickle-Power-Sports/ui/lib/utils";
+import { Dialog } from "@base-ui/react/dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
@@ -41,11 +42,13 @@ import { toast } from "sonner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { authClient } from "@/lib/auth-client";
+import { requireResolvedTenant } from "@/lib/tenant-guard";
 import { trpc, trpcClient } from "@/utils/trpc";
 
 export const Route = createFileRoute("/team")({
 	component: TeamPage,
 	beforeLoad: async () => {
+		await requireResolvedTenant();
 		const session = await authClient.getSession();
 		if (!session.data) {
 			redirect({
@@ -383,9 +386,15 @@ function TenantPanel({ canEditSlug }: { canEditSlug: boolean }) {
 
 function DomainsPanel() {
 	const queryClient = useQueryClient();
+	const navigate = Route.useNavigate();
 	const settings = useQuery(trpc.tenant.settings.queryOptions());
 	const [domain, setDomain] = useState("");
 	const [type, setType] = useState<DomainType>("SUBDOMAIN");
+	const [deleteTarget, setDeleteTarget] = useState<{
+		id: string;
+		domain: string;
+	} | null>(null);
+	const [deleteConfirmation, setDeleteConfirmation] = useState("");
 	const rootDomain =
 		settings.data?.rootDomain ?? (import.meta.env.DEV ? "localhost" : "");
 	const canAddSubdomain = type !== "SUBDOMAIN" || Boolean(rootDomain);
@@ -418,13 +427,16 @@ function DomainsPanel() {
 		},
 	);
 
-	const removeDomain = useMutation(
+	const deleteTenantForDomain = useMutation(
 		{
-			mutationFn: (input: { domainId: string }) =>
-				trpcClient.tenant.removeDomain.mutate(input),
+			mutationFn: (input: { domainId: string; confirmDomain: string }) =>
+				trpcClient.tenant.deleteTenantForDomain.mutate(input),
 			onSuccess: async (result) => {
-				toast.success(result.removed ? "Domain removed" : "Domain was already removed");
-				await refreshSettings();
+				toast.success(`${result.domain} and tenant data deleted`);
+				setDeleteTarget(null);
+				setDeleteConfirmation("");
+				await queryClient.invalidateQueries({ queryKey: trpc.pathKey() });
+				navigate({ to: "/dashboard" });
 			},
 			onError: (error) => toast.error(error.message),
 		},
@@ -454,13 +466,46 @@ function DomainsPanel() {
 		return `${protocol}//${domain}${portSuffix}`;
 	}
 
+	function domainTenantName(item: object) {
+		if (
+			"tenant" in item &&
+			typeof item.tenant === "object" &&
+			item.tenant &&
+			"name" in item.tenant &&
+			typeof item.tenant.name === "string"
+		) {
+			return item.tenant.name;
+		}
+
+		return null;
+	}
+
+	function openDeleteTenantDialog(item: { id: string; domain: string }) {
+		setDeleteTarget(item);
+		setDeleteConfirmation("");
+	}
+
+	function handleDeleteTenantForDomain(event: FormEvent) {
+		event.preventDefault();
+		if (!deleteTarget) {
+			return;
+		}
+
+		deleteTenantForDomain.mutate({
+			domainId: deleteTarget.id,
+			confirmDomain: deleteConfirmation,
+		});
+	}
+
 	return (
-		<div className="grid gap-4 xl:grid-cols-[22rem_1fr]">
+		<>
+			<div className="grid gap-4 xl:grid-cols-[22rem_1fr]">
 			<Card>
 				<CardHeader>
 					<CardTitle>Add Domain</CardTitle>
 					<CardDescription>
-						Add a subdomain or custom domain that should resolve to this tenant.
+						System subdomains create a new tenant. Custom domains resolve to
+						the current tenant.
 					</CardDescription>
 					<CardAction>
 						<Globe2Icon className="size-4 text-muted-foreground" />
@@ -518,7 +563,11 @@ function DomainsPanel() {
 						) : null}
 						<Button disabled={addDomain.isPending || !canAddSubdomain} type="submit">
 							<Globe2Icon className="size-4" />
-							{addDomain.isPending ? "Adding" : "Add domain"}
+							{addDomain.isPending
+								? "Adding"
+								: type === "SUBDOMAIN"
+									? "Create tenant subdomain"
+									: "Add custom domain"}
 						</Button>
 					</form>
 				</CardContent>
@@ -528,8 +577,8 @@ function DomainsPanel() {
 				<CardHeader>
 					<CardTitle>Domains</CardTitle>
 					<CardDescription>
-						Domains route requests to this tenant. Verification status is stored
-						for future DNS checks.
+						System admins see all tenant domains. Tenant owners see domains
+						for their tenant.
 					</CardDescription>
 					<CardAction>
 						<Globe2Icon className="size-4 text-muted-foreground" />
@@ -557,6 +606,11 @@ function DomainsPanel() {
 										<div className="truncate font-medium text-sm">
 											{item.domain}
 										</div>
+										{domainTenantName(item) ? (
+											<div className="truncate text-muted-foreground text-xs">
+												{domainTenantName(item)}
+											</div>
+										) : null}
 										<div className="text-muted-foreground text-xs md:hidden">
 											{item.type === "SUBDOMAIN" ? "Subdomain" : "Custom"} ·{" "}
 											{domainStatus(item)}
@@ -584,12 +638,12 @@ function DomainsPanel() {
 											<ExternalLinkIcon className="size-4" />
 										</a>
 										<Button
-											aria-label={`Remove ${item.domain}`}
-											disabled={removeDomain.isPending}
+											aria-label={`Delete ${item.domain} tenant data`}
+											disabled={deleteTenantForDomain.isPending}
 											size="icon-sm"
 											type="button"
 											variant="destructive"
-											onClick={() => removeDomain.mutate({ domainId: item.id })}
+											onClick={() => openDeleteTenantDialog(item)}
 										>
 											<Trash2Icon className="size-4" />
 										</Button>
@@ -604,7 +658,72 @@ function DomainsPanel() {
 					)}
 				</CardContent>
 			</Card>
-		</div>
+			</div>
+			<Dialog.Root
+				open={Boolean(deleteTarget)}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDeleteTarget(null);
+						setDeleteConfirmation("");
+					}
+				}}
+			>
+				<Dialog.Portal>
+					<Dialog.Backdrop className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs" />
+					<Dialog.Popup className="-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 grid w-[calc(100vw-2rem)] max-w-md gap-4 border bg-background p-5 shadow-xl">
+						<Dialog.Title className="font-semibold text-lg">
+							Delete tenant data
+						</Dialog.Title>
+						<Dialog.Description className="text-muted-foreground text-sm">
+							This will delete{" "}
+							<span className="font-medium text-foreground">
+								{deleteTarget?.domain}
+							</span>{" "}
+							and all tenant-scoped data for this tenant.
+						</Dialog.Description>
+						<form className="grid gap-4" onSubmit={handleDeleteTenantForDomain}>
+							<label className="grid gap-1.5">
+								<span className="font-medium text-xs">
+									Type the domain to confirm
+								</span>
+								<Input
+									autoComplete="off"
+									autoFocus
+									placeholder={deleteTarget?.domain}
+									value={deleteConfirmation}
+									onChange={(event) => setDeleteConfirmation(event.target.value)}
+								/>
+							</label>
+							<div className="flex justify-end gap-2">
+								<Button
+									disabled={deleteTenantForDomain.isPending}
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setDeleteTarget(null);
+										setDeleteConfirmation("");
+									}}
+								>
+									Cancel
+								</Button>
+								<Button
+									disabled={
+										deleteTenantForDomain.isPending ||
+										deleteConfirmation.toLowerCase() !==
+											deleteTarget?.domain.toLowerCase()
+									}
+									type="submit"
+									variant="destructive"
+								>
+									<Trash2Icon className="size-4" />
+									{deleteTenantForDomain.isPending ? "Deleting" : "Delete tenant"}
+								</Button>
+							</div>
+						</form>
+					</Dialog.Popup>
+				</Dialog.Portal>
+			</Dialog.Root>
+		</>
 	);
 }
 
@@ -718,10 +837,11 @@ function MembersPanel({
 
 			<Card>
 				<CardHeader>
-					<CardTitle>Registered Users</CardTitle>
+					<CardTitle>{isPlatformAdmin ? "Registered Users" : "Tenant Members"}</CardTitle>
 					<CardDescription>
-						All registered accounts are listed here. Assign a tenant role to
-						give a user access to this admin area.
+						{isPlatformAdmin
+							? "All registered accounts are listed here. Assign a tenant role to give a user access to this admin area."
+							: "Only users attached to this tenant are listed here. Add a member by email to give another user tenant access."}
 					</CardDescription>
 					<CardAction>
 						<UsersIcon className="size-4 text-muted-foreground" />

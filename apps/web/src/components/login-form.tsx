@@ -13,6 +13,7 @@ import { useId, useState } from "react"
 import { toast } from "sonner"
 
 import { authClient } from "@/lib/auth-client"
+import { trpcClient } from "@/utils/trpc"
 
 function detectIdentifierType(value: string): "email" | "phone" | "username" {
 	if (value.includes("@")) return "email"
@@ -28,6 +29,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 	const [password, setPassword] = useState("")
 	const [isLoading, setIsLoading] = useState(false)
 
+	async function handleSignedIn() {
+		try {
+			await trpcClient.tenant.joinCurrent.mutate()
+		} catch (joinError) {
+			console.warn("Tenant bootstrap skipped", joinError)
+		}
+
+		toast.success("Signed in successfully")
+		navigate({ to: "/dashboard" })
+	}
+
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
 		setIsLoading(true)
@@ -38,10 +50,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 			await authClient.signIn.email(
 				{ email: identifier, password },
 				{
-					onSuccess: () => {
-						toast.success("Signed in successfully")
-						navigate({ to: "/dashboard" })
-					},
+					onSuccess: handleSignedIn,
 					onError: (err) => {
 						toast.error(err.error.message || "Sign in failed")
 						setIsLoading(false)
@@ -70,10 +79,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 			await authClient.signIn.email(
 				{ email: emailForSignIn, password },
 				{
-					onSuccess: () => {
-						toast.success("Signed in successfully")
-						navigate({ to: "/dashboard" })
-					},
+					onSuccess: handleSignedIn,
 					onError: (err) => {
 						toast.error(err.error.message || "Sign in failed")
 						setIsLoading(false)
@@ -84,10 +90,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 			await authClient.signIn.username(
 				{ username: identifier, password },
 				{
-					onSuccess: () => {
-						toast.success("Signed in successfully")
-						navigate({ to: "/dashboard" })
-					},
+					onSuccess: handleSignedIn,
 					onError: (err) => {
 						toast.error(err.error.message || "Sign in failed")
 						setIsLoading(false)

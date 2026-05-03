@@ -15,7 +15,7 @@ import { authClient } from "@/lib/auth-client"
 
 type Step = "email" | "otp" | "done"
 
-export function ForgotPasswordForm({ className, ...props }: React.ComponentProps<"div">) {
+export function ForgotPasswordForm({ className, ...props }: React.ComponentProps<"form">) {
 	const emailId = useId()
 	const otpId = useId()
 	const passwordId = useId()
@@ -28,7 +28,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
 	const [confirmPassword, setConfirmPassword] = useState("")
 	const [isLoading, setIsLoading] = useState(false)
 
-	async function handleSendOtp(e: React.FormEvent) {
+	async function handleSendOtp(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault()
 		setIsLoading(true)
 		const { error } = await authClient.emailOtp.sendVerificationOtp({
@@ -44,7 +44,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
 		setIsLoading(false)
 	}
 
-	async function handleResetPassword(e: React.FormEvent) {
+	async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
 		e.preventDefault()
 		if (newPassword !== confirmPassword) {
 			toast.error("Passwords do not match")

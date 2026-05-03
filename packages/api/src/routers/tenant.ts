@@ -17,6 +17,13 @@ function rootDomain() {
 	return process.env.ROOT_DOMAIN ?? (process.env.NODE_ENV === "production" ? null : "localhost");
 }
 
+function tenantNameFromSlug(slug: string) {
+	return slug
+		.split("-")
+		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+		.join(" ");
+}
+
 function normalizeTenantDomain(domain: string, type: "SUBDOMAIN" | "CUSTOM") {
 	const value = domain.trim().toLowerCase();
 
@@ -41,37 +48,6 @@ function normalizeTenantDomain(domain: string, type: "SUBDOMAIN" | "CUSTOM") {
 	}
 
 	return `${label}.${configuredRootDomain}`;
-}
-
-function tenantNameFromSlug(slug: string) {
-	return slug
-		.split("-")
-		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-		.join(" ");
-}
-
-function tenantSlugFromHost(host: string | null) {
-	if (!host) {
-		return null;
-	}
-
-	const configuredRootDomain = rootDomain();
-	const normalizedHost = host.toLowerCase();
-
-	if (process.env.NODE_ENV !== "production" && normalizedHost.endsWith(".localhost")) {
-		return slugify(normalizedHost.replace(".localhost", ""));
-	}
-
-	if (
-		configuredRootDomain &&
-		normalizedHost !== configuredRootDomain &&
-		normalizedHost !== `www.${configuredRootDomain}` &&
-		normalizedHost.endsWith(`.${configuredRootDomain}`)
-	) {
-		return slugify(normalizedHost.replace(`.${configuredRootDomain}`, ""));
-	}
-
-	return null;
 }
 
 function assertCanAssignRole(currentRole: TenantRole, nextRole: TenantRole) {
@@ -100,13 +76,37 @@ export const tenantRouter = router({
 		const tenant = await ctx.prisma.tenant.findUnique({
 			where: { id: ctx.tenant.id },
 			include: {
-				domains: {
-					orderBy: [{ type: "asc" }, { createdAt: "asc" }],
-				},
+				domains: ctx.tenantMembership.isPlatformAdmin
+					? false
+					: {
+							orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+						},
 			},
 		});
 
-		return tenant ? { ...tenant, rootDomain: rootDomain() } : null;
+		if (!tenant) {
+			return null;
+		}
+
+		if (!ctx.tenantMembership.isPlatformAdmin) {
+			return { ...tenant, rootDomain: rootDomain() };
+		}
+
+		const domains = await ctx.prisma.tenantDomain.findMany({
+			include: {
+				tenant: {
+					select: {
+						id: true,
+						name: true,
+						slug: true,
+						status: true,
+					},
+				},
+			},
+			orderBy: [{ type: "asc" }, { createdAt: "desc" }],
+		});
+
+		return { ...tenant, domains, rootDomain: rootDomain() };
 	}),
 
 	listMyTenants: protectedProcedure.query(async ({ ctx }) => {
@@ -129,19 +129,7 @@ export const tenantRouter = router({
 	}),
 
 	joinCurrent: protectedProcedure.mutation(async ({ ctx }) => {
-		const hostTenantSlug = tenantSlugFromHost(ctx.requestHost);
-		const tenant =
-			ctx.tenant ??
-			(hostTenantSlug
-				? await ctx.prisma.tenant.upsert({
-						where: { slug: hostTenantSlug },
-						update: {},
-						create: {
-							name: tenantNameFromSlug(hostTenantSlug),
-							slug: hostTenantSlug,
-						},
-					})
-				: null);
+		const tenant = ctx.tenant;
 
 		if (!tenant) {
 			throw new TRPCError({
@@ -164,6 +152,26 @@ export const tenantRouter = router({
 		});
 
 		if (existing) {
+			const [memberCount, ownerCount] = await Promise.all([
+				ctx.prisma.tenantMember.count({
+					where: { tenantId: tenant.id },
+				}),
+				ctx.prisma.tenantMember.count({
+					where: { tenantId: tenant.id, role: "OWNER" },
+				}),
+			]);
+
+			if (memberCount === 1 && ownerCount === 0 && existing.role !== "OWNER") {
+				return ctx.prisma.tenantMember.update({
+					where: { id: existing.id },
+					data: { role: "OWNER" },
+					include: {
+						tenant: true,
+						user: true,
+					},
+				});
+			}
+
 			return existing;
 		}
 
@@ -200,8 +208,17 @@ export const tenantRouter = router({
 		}),
 	),
 
-	listRegisteredUsers: tenantRoleProcedure(tenantAdminRoles).query(({ ctx }) =>
-		ctx.prisma.user.findMany({
+	listRegisteredUsers: tenantRoleProcedure(tenantAdminRoles).query(({ ctx }) => {
+		const tenantMembershipFilter = {
+			tenantMemberships: {
+				some: { tenantId: ctx.tenant.id },
+			},
+		};
+
+		return ctx.prisma.user.findMany({
+			where: ctx.tenantMembership.isPlatformAdmin
+				? undefined
+				: tenantMembershipFilter,
 			select: {
 				id: true,
 				name: true,
@@ -221,8 +238,8 @@ export const tenantRouter = router({
 				},
 			},
 			orderBy: { createdAt: "desc" },
-		}),
-	),
+		});
+	}),
 
 	addMember: tenantRoleProcedure(tenantAdminRoles)
 		.input(
@@ -406,6 +423,95 @@ export const tenantRouter = router({
 				});
 			}
 
+			if (input.type === "SUBDOMAIN") {
+				if (!ctx.tenantMembership.isPlatformAdmin) {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Only system admins can create tenant subdomains",
+					});
+				}
+
+				const configuredRootDomain = rootDomain();
+				if (!configuredRootDomain) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "ROOT_DOMAIN must be configured before adding subdomains",
+					});
+				}
+
+				const tenantSlug = slugify(
+					normalizedDomain.replace(`.${configuredRootDomain}`, ""),
+				);
+
+				if (!tenantSlug) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Subdomain name is required",
+					});
+				}
+
+				const existingTenant = await ctx.prisma.tenant.findUnique({
+					where: { slug: tenantSlug },
+					include: {
+						domains: true,
+						members: true,
+					},
+				});
+
+				if (existingTenant) {
+					if (existingTenant.domains.length > 0) {
+						throw new TRPCError({
+							code: "CONFLICT",
+							message: "Tenant slug is already connected to another domain",
+						});
+					}
+
+					if (existingTenant.members.length > 0) {
+						throw new TRPCError({
+							code: "CONFLICT",
+							message:
+								"Tenant slug already exists with members. Delete or rename that tenant first.",
+						});
+					}
+
+					return ctx.prisma.$transaction(async (tx) => {
+						await tx.tenant.update({
+							where: { id: existingTenant.id },
+							data: {
+								primaryDomain: normalizedDomain,
+								status: "ACTIVE",
+							},
+						});
+
+						return tx.tenantDomain.create({
+							data: {
+								tenantId: existingTenant.id,
+								domain: normalizedDomain,
+								type: input.type,
+							},
+						});
+					});
+				}
+
+				return ctx.prisma.$transaction(async (tx) => {
+					const tenant = await tx.tenant.create({
+						data: {
+							name: tenantNameFromSlug(tenantSlug),
+							slug: tenantSlug,
+							primaryDomain: normalizedDomain,
+						},
+					});
+
+					return tx.tenantDomain.create({
+						data: {
+							tenantId: tenant.id,
+							domain: normalizedDomain,
+							type: input.type,
+						},
+					});
+				});
+			}
+
 			return ctx.prisma.tenantDomain.create({
 				data: {
 					tenantId: ctx.tenant.id,
@@ -415,21 +521,48 @@ export const tenantRouter = router({
 			});
 		}),
 
-	removeDomain: tenantRoleProcedure(tenantAdminRoles)
-		.input(z.object({ domainId: z.string() }))
+	deleteTenantForDomain: tenantRoleProcedure(tenantAdminRoles)
+		.input(
+			z.object({
+				domainId: z.string(),
+				confirmDomain: z.string().trim().min(1),
+			}),
+		)
 		.mutation(async ({ ctx, input }) => {
+			if (
+				!ctx.tenantMembership.isPlatformAdmin &&
+				ctx.tenantMembership.role !== "OWNER"
+			) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Only tenant owners can delete tenant data",
+				});
+			}
+
 			const domain = await ctx.prisma.tenantDomain.findFirst({
 				where: {
 					id: input.domainId,
-					tenantId: ctx.tenant.id,
+					...(ctx.tenantMembership.isPlatformAdmin
+						? {}
+						: { tenantId: ctx.tenant.id }),
 				},
 			});
 
 			if (!domain) {
-				return { removed: false };
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Domain not found",
+				});
 			}
 
-			await ctx.prisma.tenantDomain.delete({ where: { id: domain.id } });
-			return { removed: true };
+			if (input.confirmDomain.toLowerCase() !== domain.domain.toLowerCase()) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Domain confirmation did not match",
+				});
+			}
+
+			await ctx.prisma.tenant.delete({ where: { id: ctx.tenant.id } });
+			return { deleted: true, domain: domain.domain };
 		}),
 });
