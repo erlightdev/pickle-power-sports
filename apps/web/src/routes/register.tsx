@@ -1,16 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 import { AuthLayout } from "@/components/auth-layout"
-import { LoginForm } from "@/components/login-form"
+import { RegisterForm } from "@/components/register-form"
 
-export const Route = createFileRoute("/login")({
+export const Route = createFileRoute("/register")({
 	component: RouteComponent,
 })
 
 function RouteComponent() {
 	return (
 		<AuthLayout>
-			<LoginForm />
+			<RegisterForm />
 		</AuthLayout>
 	)
 }

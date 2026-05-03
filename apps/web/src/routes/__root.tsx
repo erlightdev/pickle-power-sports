@@ -44,7 +44,12 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function RootComponent() {
 	const location = useLocation();
-	const hideHeader = location.pathname.startsWith("/dashboard");
+	const hideHeader =
+		location.pathname.startsWith("/dashboard") ||
+		location.pathname.startsWith("/login") ||
+		location.pathname.startsWith("/register") ||
+		location.pathname.startsWith("/forgot-password") ||
+		location.pathname.startsWith("/reset-password");
 
 	return (
 		<>

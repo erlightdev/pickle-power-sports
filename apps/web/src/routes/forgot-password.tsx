@@ -1,16 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 import { AuthLayout } from "@/components/auth-layout"
-import { LoginForm } from "@/components/login-form"
+import { ForgotPasswordForm } from "@/components/forgot-password-form"
 
-export const Route = createFileRoute("/login")({
+export const Route = createFileRoute("/forgot-password")({
 	component: RouteComponent,
 })
 
 function RouteComponent() {
 	return (
 		<AuthLayout>
-			<LoginForm />
+			<ForgotPasswordForm />
 		</AuthLayout>
 	)
 }
