@@ -11,7 +11,7 @@ Tenant resolution happens in `apps/server/src/index.ts`.
 - You can override it with `DEFAULT_TENANT_SLUG`.
 - Production subdomains require `ROOT_DOMAIN`.
 - Subdomains resolve from an explicit `tenant_domain` row, such as `rallypoint.yourdomain.com`.
-- Custom domains resolve through the `tenant_domain` table.
+- Main branding domains resolve through the `tenant_domain` table.
 - In local development only, `X-Tenant-Slug` can select a tenant while using `localhost`.
 - Tenants are not auto-created during normal host resolution. The tenant must already exist and have `ACTIVE` status.
 
@@ -27,7 +27,7 @@ If a tenant is deleted, the React dev server may still serve the app shell at th
 
 - Tenants must be created before traffic is routed to them.
 - Only active tenants should resolve.
-- Custom domains should be stored in `tenant_domain`.
+- Main branding domains should be stored in `tenant_domain`.
 - Production requests should not rely on `X-Tenant-Slug`.
 - Tenant membership is required for protected tenant procedures.
 

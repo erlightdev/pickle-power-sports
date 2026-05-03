@@ -75,6 +75,23 @@ const settingsSections: {
 	{ id: "domains", label: "Domains", icon: Globe2Icon },
 ];
 
+function mainDomainFromInput(value: string) {
+	const withoutProtocol = value
+		.trim()
+		.toLowerCase()
+		.replace(/^https?:\/\//, "")
+		.replace(/\/.*$/, "")
+		.replace(/:\d+$/, "")
+		.replace(/^www\./, "");
+	const labels = withoutProtocol.split(".").filter(Boolean);
+
+	if (labels.length < 2) {
+		return "example.com";
+	}
+
+	return labels.slice(-2).join(".");
+}
+
 function getSectionFromHash(): SettingsSection {
 	if (typeof window === "undefined") {
 		return "members";
@@ -204,7 +221,11 @@ function TeamPage() {
 									isPlatformAdmin={Boolean(membership?.isPlatformAdmin)}
 								/>
 							) : null}
-							{activeSection === "domains" ? <DomainsPanel /> : null}
+							{activeSection === "domains" ? (
+								<DomainsPanel
+									isPlatformAdmin={Boolean(membership?.isPlatformAdmin)}
+								/>
+							) : null}
 						</>
 					) : (
 						<Card>
@@ -384,12 +405,14 @@ function TenantPanel({ canEditSlug }: { canEditSlug: boolean }) {
 	);
 }
 
-function DomainsPanel() {
+function DomainsPanel({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
 	const queryClient = useQueryClient();
 	const navigate = Route.useNavigate();
 	const settings = useQuery(trpc.tenant.settings.queryOptions());
 	const [domain, setDomain] = useState("");
-	const [type, setType] = useState<DomainType>("SUBDOMAIN");
+	const [type, setType] = useState<DomainType>(
+		isPlatformAdmin ? "SUBDOMAIN" : "CUSTOM",
+	);
 	const [deleteTarget, setDeleteTarget] = useState<{
 		id: string;
 		domain: string;
@@ -397,7 +420,8 @@ function DomainsPanel() {
 	const [deleteConfirmation, setDeleteConfirmation] = useState("");
 	const rootDomain =
 		settings.data?.rootDomain ?? (import.meta.env.DEV ? "localhost" : "");
-	const canAddSubdomain = type !== "SUBDOMAIN" || Boolean(rootDomain);
+	const canAddDomain =
+		type === "CUSTOM" || (isPlatformAdmin && Boolean(rootDomain));
 	const normalizedSubdomain = domain
 		.trim()
 		.toLowerCase()
@@ -407,7 +431,14 @@ function DomainsPanel() {
 		? rootDomain
 			? `${normalizedSubdomain || "name"}.${rootDomain}`
 			: "Configure ROOT_DOMAIN first"
-		: domain.trim() || "custom-domain.com";
+		: mainDomainFromInput(domain);
+
+	useEffect(() => {
+		if (!isPlatformAdmin && type === "SUBDOMAIN") {
+			setType("CUSTOM");
+			setDomain("");
+		}
+	}, [isPlatformAdmin, type]);
 
 	async function refreshSettings() {
 		await queryClient.invalidateQueries(trpc.tenant.settings.queryFilter());
@@ -420,7 +451,7 @@ function DomainsPanel() {
 			onSuccess: async () => {
 				toast.success("Domain added");
 				setDomain("");
-				setType("SUBDOMAIN");
+				setType(isPlatformAdmin ? "SUBDOMAIN" : "CUSTOM");
 				await refreshSettings();
 			},
 			onError: (error) => toast.error(error.message),
@@ -444,6 +475,11 @@ function DomainsPanel() {
 
 	function handleAddDomain(event: FormEvent) {
 		event.preventDefault();
+		if (!isPlatformAdmin && type === "SUBDOMAIN") {
+			toast.error("Only platform admins can create tenant subdomains");
+			return;
+		}
+
 		addDomain.mutate({ domain, type });
 	}
 
@@ -502,10 +538,13 @@ function DomainsPanel() {
 			<div className="grid gap-4 xl:grid-cols-[22rem_1fr]">
 			<Card>
 				<CardHeader>
-					<CardTitle>Add Domain</CardTitle>
+					<CardTitle>
+						{isPlatformAdmin ? "Add Domain" : "Add Branding Domain"}
+					</CardTitle>
 					<CardDescription>
-						System subdomains create a new tenant. Custom domains resolve to
-						the current tenant.
+						{isPlatformAdmin
+							? "System subdomains create new tenants. Main domains resolve to the current tenant."
+							: "Attach your main branded domain to this tenant. Subdomains are managed by the platform admin."}
 					</CardDescription>
 					<CardAction>
 						<Globe2Icon className="size-4 text-muted-foreground" />
@@ -515,7 +554,7 @@ function DomainsPanel() {
 					<form className="grid gap-3" onSubmit={handleAddDomain}>
 						<label className="grid gap-1.5">
 							<span className="font-medium text-xs">
-								{type === "SUBDOMAIN" ? "Subdomain name" : "Domain"}
+								{type === "SUBDOMAIN" ? "Subdomain name" : "Main domain"}
 							</span>
 							{type === "SUBDOMAIN" ? (
 								<div className="grid grid-cols-[1fr_auto]">
@@ -533,7 +572,7 @@ function DomainsPanel() {
 								</div>
 							) : (
 								<Input
-									placeholder="club.example.com"
+									placeholder="example.com"
 									required
 									type="text"
 									value={domain}
@@ -544,14 +583,22 @@ function DomainsPanel() {
 						<label className="grid gap-1.5">
 							<span className="font-medium text-xs">Type</span>
 							<select
+								disabled={!isPlatformAdmin}
 								className="h-8 w-full min-w-0 rounded-none border border-input bg-background px-2.5 py-1 text-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
 								value={type}
 								onChange={(event) => setType(event.target.value as DomainType)}
 							>
-								<option value="SUBDOMAIN">Subdomain</option>
-								<option value="CUSTOM">Custom domain</option>
+								{isPlatformAdmin ? (
+									<option value="SUBDOMAIN">Subdomain</option>
+								) : null}
+								<option value="CUSTOM">Main domain</option>
 							</select>
 						</label>
+						{type === "CUSTOM" && domain.trim().split(".").filter(Boolean).length > 2 ? (
+							<div className="text-muted-foreground text-xs">
+								Subdomain part will be removed and only the main domain will be saved.
+							</div>
+						) : null}
 						<div className="text-muted-foreground text-xs">
 							Will save as{" "}
 							<span className="font-medium text-foreground">{domainPreview}</span>
@@ -561,13 +608,13 @@ function DomainsPanel() {
 								Configure ROOT_DOMAIN before adding production subdomains.
 							</div>
 						) : null}
-						<Button disabled={addDomain.isPending || !canAddSubdomain} type="submit">
+						<Button disabled={addDomain.isPending || !canAddDomain} type="submit">
 							<Globe2Icon className="size-4" />
 							{addDomain.isPending
 								? "Adding"
 								: type === "SUBDOMAIN"
 									? "Create tenant subdomain"
-									: "Add custom domain"}
+									: "Add main domain"}
 						</Button>
 					</form>
 				</CardContent>
@@ -577,8 +624,9 @@ function DomainsPanel() {
 				<CardHeader>
 					<CardTitle>Domains</CardTitle>
 					<CardDescription>
-						System admins see all tenant domains. Tenant owners see domains
-						for their tenant.
+						{isPlatformAdmin
+							? "System admins see all tenant domains."
+							: "Your system subdomain is managed by the platform admin. Add a main domain for branding."}
 					</CardDescription>
 					<CardAction>
 						<Globe2Icon className="size-4 text-muted-foreground" />
@@ -612,7 +660,7 @@ function DomainsPanel() {
 											</div>
 										) : null}
 										<div className="text-muted-foreground text-xs md:hidden">
-											{item.type === "SUBDOMAIN" ? "Subdomain" : "Custom"} ·{" "}
+											{item.type === "SUBDOMAIN" ? "Subdomain" : "Main domain"} ·{" "}
 											{domainStatus(item)}
 										</div>
 										{domainStatus(item) === "Local" ? (
@@ -622,7 +670,7 @@ function DomainsPanel() {
 										) : null}
 									</div>
 									<div className="hidden text-xs md:block">
-										{item.type === "SUBDOMAIN" ? "Subdomain" : "Custom"}
+										{item.type === "SUBDOMAIN" ? "Subdomain" : "Main domain"}
 									</div>
 									<div className="hidden text-xs md:block">
 										{domainStatus(item)}
@@ -637,16 +685,18 @@ function DomainsPanel() {
 										>
 											<ExternalLinkIcon className="size-4" />
 										</a>
-										<Button
-											aria-label={`Delete ${item.domain} tenant data`}
-											disabled={deleteTenantForDomain.isPending}
-											size="icon-sm"
-											type="button"
-											variant="destructive"
-											onClick={() => openDeleteTenantDialog(item)}
-										>
-											<Trash2Icon className="size-4" />
-										</Button>
+										{isPlatformAdmin ? (
+											<Button
+												aria-label={`Delete ${item.domain} tenant data`}
+												disabled={deleteTenantForDomain.isPending}
+												size="icon-sm"
+												type="button"
+												variant="destructive"
+												onClick={() => openDeleteTenantDialog(item)}
+											>
+												<Trash2Icon className="size-4" />
+											</Button>
+										) : null}
 									</div>
 								</div>
 							))}

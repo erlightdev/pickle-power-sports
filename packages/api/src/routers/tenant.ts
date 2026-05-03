@@ -24,11 +24,31 @@ function tenantNameFromSlug(slug: string) {
 		.join(" ");
 }
 
+function normalizeMainDomain(domain: string) {
+	const withoutProtocol = domain
+		.trim()
+		.toLowerCase()
+		.replace(/^https?:\/\//, "")
+		.replace(/\/.*$/, "")
+		.replace(/:\d+$/, "")
+		.replace(/^www\./, "");
+	const labels = withoutProtocol.split(".").filter(Boolean);
+
+	if (labels.length < 2) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "Main domain must include a name and extension",
+		});
+	}
+
+	return labels.slice(-2).join(".");
+}
+
 function normalizeTenantDomain(domain: string, type: "SUBDOMAIN" | "CUSTOM") {
 	const value = domain.trim().toLowerCase();
 
 	if (type === "CUSTOM") {
-		return value.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+		return normalizeMainDomain(value);
 	}
 
 	const label = slugify(value.split(".")[0] ?? "");

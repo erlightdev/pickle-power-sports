@@ -156,7 +156,7 @@ The Domains section manages domains that resolve to the current tenant.
 Admins can:
 
 - Add a subdomain
-- Add a custom domain
+- Add a main branding domain
 - View verification status
 - Delete a domain tenant and its tenant-scoped data
 
@@ -209,7 +209,7 @@ The suffix comes from `ROOT_DOMAIN`. When `ROOT_DOMAIN` is not set, the app uses
 For `CUSTOM`, admins enter the full domain, such as:
 
 ```text
-club.example.com
+example.com
 ```
 
 Verification is currently stored and displayed, but DNS verification automation is not implemented yet.
@@ -218,7 +218,7 @@ Status labels:
 
 - `Local`: `localhost` or `*.localhost` domains used for development.
 - `Verified`: DNS verification has been marked true.
-- `Pending`: production/custom domain has not been verified yet.
+- `Pending`: production/main domain has not been verified yet.
 
 Deleting a domain from the Domains table is destructive. It deletes the current tenant row, which cascades tenant-scoped records such as members, products, orders, venues, classes, tournaments, content, and domain rows.
 
