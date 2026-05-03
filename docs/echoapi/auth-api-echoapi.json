@@ -1,0 +1,428 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Pickle Power Sports – Auth API",
+    "version": "1.0.0",
+    "description": "Complete authentication API powered by Better Auth.\n\nBase URL: http://localhost:3000\n\nAll `/api/auth/*` routes are handled by Better Auth. Custom routes (`/api/change-email`, `/api/lookup-user`) are Hono endpoints on the server."
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local development" }
+  ],
+  "tags": [
+    { "name": "Registration", "description": "Create account and verify email" },
+    { "name": "Sign In", "description": "Authenticate with email, username, phone, or OTP" },
+    { "name": "Session", "description": "Read and destroy the current session" },
+    { "name": "Password Reset", "description": "OTP-based password reset (no link)" },
+    { "name": "Account Management", "description": "Update profile, password, and email" },
+    { "name": "Health", "description": "Server and auth health checks" }
+  ],
+  "paths": {
+    "/api/auth/sign-up/email": {
+      "post": {
+        "tags": ["Registration"],
+        "summary": "Sign up with email + password",
+        "description": "Creates a new user. Email verification is required before the user can sign in — call `send-verification-otp` next.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SignUpEmailRequest" },
+              "example": { "name": "John Smith", "email": "john@example.com", "password": "password123" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "User created successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "422": { "description": "Email already in use or validation error" }
+        }
+      }
+    },
+    "/api/auth/email-otp/send-verification-otp": {
+      "post": {
+        "tags": ["Registration", "Sign In", "Password Reset", "Account Management"],
+        "summary": "Send a 6-digit OTP email",
+        "description": "Sends a one-time code to the given address. The `type` field controls the purpose:\n- `email-verification` – verify a new account or email change\n- `sign-in` – magic sign-in code\n- `forget-password` – password reset code",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendOtpRequest" },
+              "examples": {
+                "email-verification": { "summary": "Verify account", "value": { "email": "john@example.com", "type": "email-verification" } },
+                "forget-password": { "summary": "Password reset", "value": { "email": "john@example.com", "type": "forget-password" } },
+                "sign-in": { "summary": "Magic sign-in", "value": { "email": "john@example.com", "type": "sign-in" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OTP sent" },
+          "400": { "description": "Email not found or invalid type" }
+        }
+      }
+    },
+    "/api/auth/email-otp/verify-email": {
+      "post": {
+        "tags": ["Registration"],
+        "summary": "Verify email with OTP",
+        "description": "Confirms the email address using the 6-digit code. Sets emailVerified = true and allows sign-in.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmailOtpRequest" },
+              "example": { "email": "john@example.com", "otp": "123456" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Email verified" },
+          "400": { "description": "Invalid or expired OTP" }
+        }
+      }
+    },
+    "/api/auth/sign-in/email": {
+      "post": {
+        "tags": ["Sign In"],
+        "summary": "Sign in with email + password",
+        "description": "Authenticates the user and sets a session cookie. The email must be verified.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SignInEmailRequest" },
+              "example": { "email": "john@example.com", "password": "password123" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Signed in — session cookie set", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionResponse" } } } },
+          "401": { "description": "Invalid credentials or email not verified" }
+        }
+      }
+    },
+    "/api/auth/sign-in/username": {
+      "post": {
+        "tags": ["Sign In"],
+        "summary": "Sign in with username + password",
+        "description": "Authenticates using a username instead of an email address (username plugin).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SignInUsernameRequest" },
+              "example": { "username": "john_smith", "password": "password123" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Signed in — session cookie set" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/auth/email-otp/sign-in": {
+      "post": {
+        "tags": ["Sign In"],
+        "summary": "Sign in with OTP (magic code)",
+        "description": "Passwordless sign-in. Send the code first using `send-verification-otp` with type `sign-in`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmailOtpRequest" },
+              "example": { "email": "john@example.com", "otp": "123456" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Signed in — session cookie set" },
+          "400": { "description": "Invalid or expired OTP" }
+        }
+      }
+    },
+    "/api/lookup-user": {
+      "get": {
+        "tags": ["Sign In"],
+        "summary": "Lookup user by phone number",
+        "description": "Custom Hono endpoint. Returns email + username for a phone number. Use the returned email to call `sign-in/email` for phone-based login.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "query",
+            "required": true,
+            "description": "Phone number e.g. +61400000000",
+            "schema": { "type": "string" },
+            "example": "+61400000000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": { "type": "string" },
+                    "username": { "type": "string" }
+                  }
+                },
+                "example": { "email": "john@example.com", "username": "john_smith" }
+              }
+            }
+          },
+          "404": { "description": "No user with that phone number" }
+        }
+      }
+    },
+    "/api/auth/get-session": {
+      "get": {
+        "tags": ["Session"],
+        "summary": "Get current session",
+        "description": "Returns the active session and user object. Requires the session cookie.",
+        "responses": {
+          "200": { "description": "Session data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionResponse" } } } },
+          "401": { "description": "No active session" }
+        }
+      }
+    },
+    "/api/auth/sign-out": {
+      "post": {
+        "tags": ["Session"],
+        "summary": "Sign out",
+        "description": "Invalidates the current session and clears the session cookie.",
+        "responses": {
+          "200": { "description": "Signed out successfully" }
+        }
+      }
+    },
+    "/api/auth/email-otp/reset-password": {
+      "post": {
+        "tags": ["Password Reset"],
+        "summary": "Reset password with OTP",
+        "description": "Verifies the OTP (sent via `send-verification-otp` with type `forget-password`) and sets a new password. User does not need to be signed in.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResetPasswordRequest" },
+              "example": { "email": "john@example.com", "otp": "123456", "password": "newpassword123" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password reset successfully" },
+          "400": { "description": "Invalid or expired OTP" }
+        }
+      }
+    },
+    "/api/auth/update-user": {
+      "post": {
+        "tags": ["Account Management"],
+        "summary": "Update profile (name / username / phone)",
+        "description": "Updates one or more profile fields for the signed-in user. All fields are optional.",
+        "security": [{ "sessionCookie": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateUserRequest" },
+              "example": { "name": "John Smith", "username": "john_smith", "phone": "+61400000000" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile updated" },
+          "401": { "description": "Not authenticated" }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": ["Account Management"],
+        "summary": "Change password",
+        "description": "Changes the password for the signed-in user. Set `revokeOtherSessions: true` to sign out all other devices.",
+        "security": [{ "sessionCookie": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" },
+              "example": { "currentPassword": "oldpassword123", "newPassword": "newpassword456", "revokeOtherSessions": false }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password changed" },
+          "400": { "description": "Current password incorrect" },
+          "401": { "description": "Not authenticated" }
+        }
+      }
+    },
+    "/api/change-email": {
+      "post": {
+        "tags": ["Account Management"],
+        "summary": "Change email — verify OTP and save",
+        "description": "Custom Hono endpoint. Step 2 of the email change flow.\n\n**Step 1:** Call `send-verification-otp` with the NEW email and type `email-verification`.\n**Step 2:** Call this endpoint with the new email + OTP.\n\nOn success the client should sign out and redirect to /login.",
+        "security": [{ "sessionCookie": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangeEmailRequest" },
+              "example": { "newEmail": "newemail@example.com", "otp": "123456" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Email updated", "content": { "application/json": { "example": { "success": true } } } },
+          "400": { "description": "Invalid OTP or email already in use" },
+          "401": { "description": "Not authenticated" }
+        }
+      }
+    },
+    "/api/auth/ok": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Auth health check",
+        "responses": {
+          "200": { "description": "Auth is healthy", "content": { "application/json": { "example": { "ok": true } } } }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Server health",
+        "responses": {
+          "200": { "description": "Server is running", "content": { "application/json": { "example": { "status": "ok" } } } }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Server ready (DB connection check)",
+        "responses": {
+          "200": { "description": "Database connection healthy", "content": { "application/json": { "example": { "status": "ready" } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Session cookie set automatically after sign-in"
+      }
+    },
+    "schemas": {
+      "SignUpEmailRequest": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": { "type": "string", "example": "John Smith" },
+          "email": { "type": "string", "format": "email", "example": "john@example.com" },
+          "password": { "type": "string", "minLength": 8, "example": "password123" }
+        }
+      },
+      "SignInEmailRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "john@example.com" },
+          "password": { "type": "string", "example": "password123" }
+        }
+      },
+      "SignInUsernameRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "john_smith" },
+          "password": { "type": "string", "example": "password123" }
+        }
+      },
+      "SendOtpRequest": {
+        "type": "object",
+        "required": ["email", "type"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "john@example.com" },
+          "type": { "type": "string", "enum": ["email-verification", "sign-in", "forget-password"] }
+        }
+      },
+      "EmailOtpRequest": {
+        "type": "object",
+        "required": ["email", "otp"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "john@example.com" },
+          "otp": { "type": "string", "pattern": "^[0-9]{6}$", "example": "123456" }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["email", "otp", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "john@example.com" },
+          "otp": { "type": "string", "pattern": "^[0-9]{6}$", "example": "123456" },
+          "password": { "type": "string", "minLength": 8, "example": "newpassword123" }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "example": "John Smith" },
+          "username": { "type": "string", "example": "john_smith" },
+          "phone": { "type": "string", "example": "+61400000000" }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["currentPassword", "newPassword"],
+        "properties": {
+          "currentPassword": { "type": "string", "example": "oldpassword123" },
+          "newPassword": { "type": "string", "minLength": 8, "example": "newpassword456" },
+          "revokeOtherSessions": { "type": "boolean", "default": false }
+        }
+      },
+      "ChangeEmailRequest": {
+        "type": "object",
+        "required": ["newEmail", "otp"],
+        "properties": {
+          "newEmail": { "type": "string", "format": "email", "example": "newemail@example.com" },
+          "otp": { "type": "string", "pattern": "^[0-9]{6}$", "example": "123456" }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "emailVerified": { "type": "boolean" },
+          "username": { "type": "string" },
+          "phone": { "type": "string" },
+          "role": { "type": "string", "enum": ["CUSTOMER", "COACH", "ADMIN"] },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "token": { "type": "string" },
+              "expiresAt": { "type": "string", "format": "date-time" },
+              "userId": { "type": "string" }
+            }
+          },
+          "user": { "$ref": "#/components/schemas/UserResponse" }
+        }
+      }
+    }
+  }
+}
