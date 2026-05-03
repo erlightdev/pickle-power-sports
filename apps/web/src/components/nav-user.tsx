@@ -97,7 +97,7 @@ export function NavUser({
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
-							<DropdownMenuItem>
+							<DropdownMenuItem onClick={() => navigate({ to: "/profile" })}>
 								<BadgeCheckIcon />
 								Profile
 							</DropdownMenuItem>

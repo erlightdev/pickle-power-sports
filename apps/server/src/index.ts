@@ -133,6 +133,46 @@ app.use("*", async (c, next) => {
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
+app.post("/api/change-email", async (c) => {
+	const session = await auth.api.getSession({ headers: c.req.raw.headers });
+	if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+
+	const { newEmail, otp } = await c.req.json<{ newEmail: string; otp: string }>();
+	if (!newEmail || !otp) return c.json({ error: "newEmail and otp required" }, 400);
+
+	const verification = await prisma.verification.findFirst({
+		where: { identifier: newEmail, expiresAt: { gt: new Date() } },
+		orderBy: { createdAt: "desc" },
+	});
+	if (!verification || verification.value !== otp) {
+		return c.json({ error: "Invalid or expired code" }, 400);
+	}
+
+	const conflict = await prisma.user.findUnique({ where: { email: newEmail } });
+	if (conflict && conflict.id !== session.user.id) {
+		return c.json({ error: "Email already in use" }, 400);
+	}
+
+	await prisma.verification.delete({ where: { id: verification.id } });
+	await prisma.user.update({
+		where: { id: session.user.id },
+		data: { email: newEmail },
+	});
+
+	return c.json({ success: true });
+});
+
+app.get("/api/lookup-user", async (c) => {
+	const phone = c.req.query("phone");
+	if (!phone) return c.json({ error: "phone required" }, 400);
+	const user = await prisma.user.findUnique({
+		where: { phone },
+		select: { email: true, username: true },
+	});
+	if (!user) return c.json({ error: "User not found" }, 404);
+	return c.json({ email: user.email, username: user.username });
+});
+
 const trpcIndex = (c: Context) => {
 	if (process.env.NODE_ENV === "production") {
 		return c.notFound();

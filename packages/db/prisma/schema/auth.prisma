@@ -1,18 +1,20 @@
 model User {
-  id            String      @id
-  name          String
-  email         String
-  emailVerified Boolean     @default(false)
-  image         String?
-  phone         String?
-  duprRating    Decimal?    @db.Decimal(3, 1)
-  skillLevel    SkillLevel?
-  role          UserRole    @default(CUSTOMER)
-  preferences   Json?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+  id              String      @id
+  name            String
+  email           String
+  emailVerified   Boolean     @default(false)
+  image           String?
+  username        String?
+  displayUsername String?
+  phone           String?
+  duprRating      Decimal?    @db.Decimal(3, 1)
+  skillLevel      SkillLevel?
+  role            UserRole    @default(CUSTOMER)
+  preferences     Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  sessions        Session[]
+  accounts        Account[]
 
   tenantMemberships              TenantMember[]
   carts                          Cart[]
@@ -29,6 +31,8 @@ model User {
   paddleFinderSubmissions        PaddleFinderSubmission[]
 
   @@unique([email])
+  @@unique([username])
+  @@unique([phone])
   @@map("user")
 }
 

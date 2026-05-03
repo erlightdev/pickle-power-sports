@@ -1,3 +1,4 @@
+import { env } from "@Pickle-Power-Sports/env/web"
 import { Button } from "@Pickle-Power-Sports/ui/components/button"
 import {
 	Field,
@@ -13,30 +14,88 @@ import { toast } from "sonner"
 
 import { authClient } from "@/lib/auth-client"
 
+function detectIdentifierType(value: string): "email" | "phone" | "username" {
+	if (value.includes("@")) return "email"
+	if (/^\+?[\d\s\-()+]{7,15}$/.test(value.trim())) return "phone"
+	return "username"
+}
+
 export function LoginForm({ className, ...props }: React.ComponentProps<"form">) {
 	const navigate = useNavigate()
-	const emailId = useId()
+	const identifierId = useId()
 	const passwordId = useId()
-	const [email, setEmail] = useState("")
+	const [identifier, setIdentifier] = useState("")
 	const [password, setPassword] = useState("")
 	const [isLoading, setIsLoading] = useState(false)
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
 		setIsLoading(true)
-		await authClient.signIn.email(
-			{ email, password },
-			{
-				onSuccess: () => {
-					toast.success("Signed in successfully")
-					navigate({ to: "/dashboard" })
+
+		const type = detectIdentifierType(identifier)
+
+		if (type === "email") {
+			await authClient.signIn.email(
+				{ email: identifier, password },
+				{
+					onSuccess: () => {
+						toast.success("Signed in successfully")
+						navigate({ to: "/dashboard" })
+					},
+					onError: (err) => {
+						toast.error(err.error.message || "Sign in failed")
+						setIsLoading(false)
+					},
 				},
-				onError: (err) => {
-					toast.error(err.error.message || "Sign in failed")
+			)
+		} else if (type === "phone") {
+			let emailForSignIn: string | null = null
+			try {
+				const res = await fetch(
+					`${env.VITE_SERVER_URL}/api/lookup-user?phone=${encodeURIComponent(identifier)}`,
+					{ credentials: "include" },
+				)
+				if (!res.ok) {
+					toast.error("No account found with that phone number")
 					setIsLoading(false)
+					return
+				}
+				const data = await res.json() as { email: string }
+				emailForSignIn = data.email
+			} catch {
+				toast.error("Sign in failed. Please try again.")
+				setIsLoading(false)
+				return
+			}
+			await authClient.signIn.email(
+				{ email: emailForSignIn, password },
+				{
+					onSuccess: () => {
+						toast.success("Signed in successfully")
+						navigate({ to: "/dashboard" })
+					},
+					onError: (err) => {
+						toast.error(err.error.message || "Sign in failed")
+						setIsLoading(false)
+					},
 				},
-			},
-		)
+			)
+		} else {
+			await authClient.signIn.username(
+				{ username: identifier, password },
+				{
+					onSuccess: () => {
+						toast.success("Signed in successfully")
+						navigate({ to: "/dashboard" })
+					},
+					onError: (err) => {
+						toast.error(err.error.message || "Sign in failed")
+						setIsLoading(false)
+					},
+				},
+			)
+		}
+
 		setIsLoading(false)
 	}
 
@@ -48,22 +107,22 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 		>
 			<FieldGroup>
 				<div className="flex flex-col items-center gap-1 text-center">
-					<h1 className="text-2xl font-bold">Welcome back</h1>
-					<p className="text-balance text-sm text-muted-foreground">
+					<h1 className="font-bold text-2xl">Welcome back</h1>
+					<p className="text-balance text-muted-foreground text-sm">
 						Sign in to your Pickle Power Sports account
 					</p>
 				</div>
 
 				<Field>
-					<FieldLabel htmlFor={emailId}>Email</FieldLabel>
+					<FieldLabel htmlFor={identifierId}>Username, email or phone</FieldLabel>
 					<Input
-						id={emailId}
-						type="email"
-						placeholder="you@example.com"
-						autoComplete="email"
+						id={identifierId}
+						type="text"
+						placeholder="you@example.com / your_username / +61 400 000 000"
+						autoComplete="username"
 						required
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
+						value={identifier}
+						onChange={(e) => setIdentifier(e.target.value)}
 					/>
 				</Field>
 

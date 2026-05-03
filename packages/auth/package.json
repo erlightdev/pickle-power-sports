@@ -15,10 +15,12 @@
     "@Pickle-Power-Sports/env": "*",
     "better-auth": "1.6.9",
     "dotenv": "^17.2.2",
+    "nodemailer": "^8.0.7",
     "zod": "^4.1.13"
   },
   "devDependencies": {
     "@Pickle-Power-Sports/config": "*",
+    "@types/nodemailer": "^8.0.0",
     "typescript": "^6"
   }
 }
