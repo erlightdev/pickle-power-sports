@@ -46,6 +46,7 @@ function RootComponent() {
 	const location = useLocation();
 	const hideHeader =
 		location.pathname.startsWith("/dashboard") ||
+		location.pathname.startsWith("/team") ||
 		location.pathname.startsWith("/profile") ||
 		location.pathname.startsWith("/login") ||
 		location.pathname.startsWith("/register") ||

@@ -111,6 +111,30 @@ export const tenantRouter = router({
 		}),
 	),
 
+	listRegisteredUsers: tenantRoleProcedure(tenantAdminRoles).query(({ ctx }) =>
+		ctx.prisma.user.findMany({
+			select: {
+				id: true,
+				name: true,
+				email: true,
+				emailVerified: true,
+				image: true,
+				role: true,
+				createdAt: true,
+				tenantMemberships: {
+					where: { tenantId: ctx.tenant.id },
+					select: {
+						id: true,
+						role: true,
+						createdAt: true,
+					},
+					take: 1,
+				},
+			},
+			orderBy: { createdAt: "desc" },
+		}),
+	),
+
 	addMember: tenantRoleProcedure(tenantAdminRoles)
 		.input(
 			z.object({
