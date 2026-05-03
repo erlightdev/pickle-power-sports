@@ -40,6 +40,23 @@ async function generateUniqueUsername(
 	return generated;
 }
 
+function isTrustedLocalOrigin(origin: string | null) {
+	if (!origin || env.NODE_ENV === "production") {
+		return false;
+	}
+
+	try {
+		const url = new URL(origin);
+		return (
+			url.protocol === "http:" &&
+			url.port === "3001" &&
+			(url.hostname === "localhost" || url.hostname.endsWith(".localhost"))
+		);
+	} catch {
+		return false;
+	}
+}
+
 export function createAuth() {
 	const prisma = createPrismaClient();
 	const isHttps = env.BETTER_AUTH_URL.startsWith("https://");
@@ -49,7 +66,12 @@ export function createAuth() {
 			provider: "postgresql",
 		}),
 
-		trustedOrigins: [env.CORS_ORIGIN],
+		trustedOrigins: (request) => {
+			const origin = request?.headers.get("origin") ?? null;
+			return isTrustedLocalOrigin(origin)
+				? [env.CORS_ORIGIN, origin]
+				: [env.CORS_ORIGIN];
+		},
 		user: {
 			additionalFields: {
 				phone: {

@@ -1,8 +1,8 @@
-import { env } from "@Pickle-Power-Sports/env/web";
 import { emailOTPClient, usernameClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { getServerUrl } from "@/lib/server-url";
 
 export const authClient = createAuthClient({
-	baseURL: env.VITE_SERVER_URL,
+	baseURL: getServerUrl(),
 	plugins: [usernameClient(), emailOTPClient()],
 });

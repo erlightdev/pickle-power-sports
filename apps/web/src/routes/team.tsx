@@ -24,18 +24,24 @@ import { cn } from "@Pickle-Power-Sports/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
+	Building2Icon,
+	Globe2Icon,
+	ExternalLinkIcon,
+	PaletteIcon,
+	SaveIcon,
 	ShieldCheckIcon,
 	Trash2Icon,
 	UserPlusIcon,
 	UsersIcon,
 } from "lucide-react";
-import { useState } from "react";
+import type { ElementType, FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
+import { trpc, trpcClient } from "@/utils/trpc";
 
 export const Route = createFileRoute("/team")({
 	component: TeamPage,
@@ -53,6 +59,31 @@ export const Route = createFileRoute("/team")({
 
 const tenantRoles = ["OWNER", "ADMIN", "STAFF", "COACH", "MEMBER"] as const;
 type TenantRole = (typeof tenantRoles)[number];
+type SettingsSection = "tenant" | "members" | "domains";
+type DomainType = "SUBDOMAIN" | "CUSTOM";
+
+const settingsSections: {
+	id: SettingsSection;
+	label: string;
+	icon: ElementType;
+}[] = [
+	{ id: "tenant", label: "Tenant", icon: Building2Icon },
+	{ id: "members", label: "Members", icon: UsersIcon },
+	{ id: "domains", label: "Domains", icon: Globe2Icon },
+];
+
+function getSectionFromHash(): SettingsSection {
+	if (typeof window === "undefined") {
+		return "members";
+	}
+
+	const section = window.location.hash.replace("#", "");
+	if (section === "tenant" || section === "domains" || section === "members") {
+		return section;
+	}
+
+	return "members";
+}
 
 function roleLabel(role: TenantRole) {
 	return role
@@ -71,6 +102,27 @@ function TeamPage() {
 		Boolean(membership?.isPlatformAdmin) ||
 		membership?.role === "OWNER" ||
 		membership?.role === "ADMIN";
+	const [activeSection, setActiveSection] =
+		useState<SettingsSection>(getSectionFromHash);
+
+	useEffect(() => {
+		function syncHash() {
+			setActiveSection(getSectionFromHash());
+		}
+
+		syncHash();
+		window.addEventListener("hashchange", syncHash);
+		return () => window.removeEventListener("hashchange", syncHash);
+	}, []);
+
+	function navigateSection(section: SettingsSection) {
+		window.history.pushState(null, "", `/team#${section}`);
+		setActiveSection(section);
+	}
+
+	const sectionTitle =
+		settingsSections.find((section) => section.id === activeSection)?.label ??
+		"Settings";
 
 	return (
 		<SidebarProvider className="h-full min-h-0">
@@ -82,7 +134,7 @@ function TeamPage() {
 					<Breadcrumb>
 						<BreadcrumbList>
 							<BreadcrumbItem>
-								<BreadcrumbPage>Role Management</BreadcrumbPage>
+								<BreadcrumbPage>{sectionTitle}</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
 					</Breadcrumb>
@@ -92,13 +144,13 @@ function TeamPage() {
 				</header>
 
 				<main className="flex flex-1 flex-col gap-5 p-4 lg:p-6">
-					<section className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+					<section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
 						<div>
 							<h1 className="font-semibold text-2xl tracking-normal">
-								Role Management
+								Settings
 							</h1>
 							<p className="text-muted-foreground text-sm">
-								Manage tenant access and staff permissions.
+								Manage tenant profile, access, and domain routing.
 							</p>
 						</div>
 						<div className="inline-flex items-center gap-2 text-muted-foreground text-xs">
@@ -113,6 +165,20 @@ function TeamPage() {
 						</div>
 					</section>
 
+					<div className="flex flex-wrap gap-2">
+						{settingsSections.map(({ id, label, icon: Icon }) => (
+							<Button
+								key={id}
+								type="button"
+								variant={activeSection === id ? "default" : "outline"}
+								onClick={() => navigateSection(id)}
+							>
+								<Icon className="size-4" />
+								{label}
+							</Button>
+						))}
+					</div>
+
 					{access.isLoading ? (
 						<Card>
 							<CardHeader>
@@ -121,19 +187,28 @@ function TeamPage() {
 							</CardHeader>
 						</Card>
 					) : canManage ? (
-						<MembersPanel
-							canAssignOwner={
-								Boolean(membership?.isPlatformAdmin) || membership?.role === "OWNER"
-							}
-							currentUserId={user?.id}
-							isPlatformAdmin={Boolean(membership?.isPlatformAdmin)}
-						/>
+						<>
+							{activeSection === "tenant" ? (
+								<TenantPanel canEditSlug={membership?.role === "OWNER"} />
+							) : null}
+							{activeSection === "members" ? (
+								<MembersPanel
+									canAssignOwner={
+										Boolean(membership?.isPlatformAdmin) ||
+										membership?.role === "OWNER"
+									}
+									currentUserId={user?.id}
+									isPlatformAdmin={Boolean(membership?.isPlatformAdmin)}
+								/>
+							) : null}
+							{activeSection === "domains" ? <DomainsPanel /> : null}
+						</>
 					) : (
 						<Card>
 							<CardHeader>
 								<CardTitle>Access required</CardTitle>
 								<CardDescription>
-									Only tenant owners and admins can manage team roles.
+									Only tenant owners and admins can manage tenant settings.
 								</CardDescription>
 								<CardAction>
 									<ShieldCheckIcon className="size-4 text-muted-foreground" />
@@ -144,6 +219,392 @@ function TeamPage() {
 				</main>
 			</SidebarInset>
 		</SidebarProvider>
+	);
+}
+
+function TenantPanel({ canEditSlug }: { canEditSlug: boolean }) {
+	const queryClient = useQueryClient();
+	const settings = useQuery(trpc.tenant.settings.queryOptions());
+	const [name, setName] = useState("");
+	const [slug, setSlug] = useState("");
+	const [logoUrl, setLogoUrl] = useState("");
+	const [brandColor, setBrandColor] = useState("");
+
+	useEffect(() => {
+		if (!settings.data) {
+			return;
+		}
+
+		setName(settings.data.name);
+		setSlug(settings.data.slug);
+		setLogoUrl(settings.data.logoUrl ?? "");
+		setBrandColor(settings.data.brandColor ?? "");
+	}, [settings.data]);
+
+	const updateTenant = useMutation(
+		{
+			mutationFn: (input: {
+				name?: string;
+				slug?: string;
+				logoUrl?: string | null;
+				brandColor?: string | null;
+			}) => trpcClient.tenant.updateCurrent.mutate(input),
+			onSuccess: async () => {
+				toast.success("Tenant updated");
+				await queryClient.invalidateQueries(trpc.tenant.settings.queryFilter());
+				await queryClient.invalidateQueries(trpc.tenant.myAccess.queryFilter());
+			},
+			onError: (error) => toast.error(error.message),
+		},
+	);
+
+	function handleSubmit(event: FormEvent) {
+		event.preventDefault();
+		updateTenant.mutate({
+			name,
+			slug: canEditSlug ? slug : undefined,
+			logoUrl: logoUrl || null,
+			brandColor: brandColor || null,
+		});
+	}
+
+	return (
+		<div className="grid gap-4 xl:grid-cols-[1fr_22rem]">
+			<Card>
+				<CardHeader>
+					<CardTitle>Tenant Profile</CardTitle>
+					<CardDescription>
+						Update the name, routing slug, logo, and brand color for this
+						tenant.
+					</CardDescription>
+					<CardAction>
+						<Building2Icon className="size-4 text-muted-foreground" />
+					</CardAction>
+				</CardHeader>
+				<CardContent>
+					{settings.isLoading ? (
+						<div className="py-6 text-muted-foreground text-sm">
+							Loading tenant
+						</div>
+					) : (
+						<form className="grid gap-4" onSubmit={handleSubmit}>
+							<div className="grid gap-3 md:grid-cols-2">
+								<label className="grid gap-1.5">
+									<span className="font-medium text-xs">Name</span>
+									<Input
+										required
+										type="text"
+										value={name}
+										onChange={(event) => setName(event.target.value)}
+									/>
+								</label>
+								<label className="grid gap-1.5">
+									<span className="font-medium text-xs">Slug</span>
+									<Input
+										disabled={!canEditSlug}
+										required
+										type="text"
+										value={slug}
+										onChange={(event) => setSlug(event.target.value)}
+									/>
+								</label>
+							</div>
+							<label className="grid gap-1.5">
+								<span className="font-medium text-xs">Logo URL</span>
+								<Input
+									placeholder="https://example.com/logo.png"
+									type="url"
+									value={logoUrl}
+									onChange={(event) => setLogoUrl(event.target.value)}
+								/>
+							</label>
+							<label className="grid gap-1.5">
+								<span className="font-medium text-xs">Brand color</span>
+								<div className="grid grid-cols-[2.5rem_1fr] gap-2">
+									<input
+										aria-label="Brand color swatch"
+										className="h-8 w-full rounded-none border border-input bg-transparent"
+										type="color"
+										value={brandColor || "#16a34a"}
+										onChange={(event) => setBrandColor(event.target.value)}
+									/>
+									<Input
+										placeholder="#16a34a"
+										type="text"
+										value={brandColor}
+										onChange={(event) => setBrandColor(event.target.value)}
+									/>
+								</div>
+							</label>
+							<Button disabled={updateTenant.isPending} type="submit">
+								<SaveIcon className="size-4" />
+								{updateTenant.isPending ? "Saving" : "Save tenant"}
+							</Button>
+						</form>
+					)}
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Preview</CardTitle>
+					<CardDescription>Current tenant identity.</CardDescription>
+					<CardAction>
+						<PaletteIcon className="size-4 text-muted-foreground" />
+					</CardAction>
+				</CardHeader>
+				<CardContent className="grid gap-3">
+					<div className="flex items-center gap-3">
+						<div
+							className="flex size-10 items-center justify-center border font-semibold text-sm"
+							style={{ backgroundColor: brandColor || undefined }}
+						>
+							{name.charAt(0).toUpperCase() || "T"}
+						</div>
+						<div className="min-w-0">
+							<div className="truncate font-medium text-sm">
+								{name || settings.data?.name || "Tenant"}
+							</div>
+							<div className="truncate text-muted-foreground text-xs">
+								/{slug || settings.data?.slug || "tenant"}
+							</div>
+						</div>
+					</div>
+					{!canEditSlug ? (
+						<p className="text-muted-foreground text-xs">
+							Only tenant owners can change the slug.
+						</p>
+					) : null}
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
+function DomainsPanel() {
+	const queryClient = useQueryClient();
+	const settings = useQuery(trpc.tenant.settings.queryOptions());
+	const [domain, setDomain] = useState("");
+	const [type, setType] = useState<DomainType>("SUBDOMAIN");
+	const rootDomain =
+		settings.data?.rootDomain ?? (import.meta.env.DEV ? "localhost" : "");
+	const canAddSubdomain = type !== "SUBDOMAIN" || Boolean(rootDomain);
+	const normalizedSubdomain = domain
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	const domainPreview = type === "SUBDOMAIN"
+		? rootDomain
+			? `${normalizedSubdomain || "name"}.${rootDomain}`
+			: "Configure ROOT_DOMAIN first"
+		: domain.trim() || "custom-domain.com";
+
+	async function refreshSettings() {
+		await queryClient.invalidateQueries(trpc.tenant.settings.queryFilter());
+	}
+
+	const addDomain = useMutation(
+		{
+			mutationFn: (input: { domain: string; type: DomainType }) =>
+				trpcClient.tenant.addDomain.mutate(input),
+			onSuccess: async () => {
+				toast.success("Domain added");
+				setDomain("");
+				setType("SUBDOMAIN");
+				await refreshSettings();
+			},
+			onError: (error) => toast.error(error.message),
+		},
+	);
+
+	const removeDomain = useMutation(
+		{
+			mutationFn: (input: { domainId: string }) =>
+				trpcClient.tenant.removeDomain.mutate(input),
+			onSuccess: async (result) => {
+				toast.success(result.removed ? "Domain removed" : "Domain was already removed");
+				await refreshSettings();
+			},
+			onError: (error) => toast.error(error.message),
+		},
+	);
+
+	function handleAddDomain(event: FormEvent) {
+		event.preventDefault();
+		addDomain.mutate({ domain, type });
+	}
+
+	function domainStatus(item: { domain: string; verified: boolean }) {
+		if (item.domain === "localhost" || item.domain.endsWith(".localhost")) {
+			return "Local";
+		}
+
+		return item.verified ? "Verified" : "Pending";
+	}
+
+	function domainHref(domain: string) {
+		const protocol = window.location.protocol || "http:";
+		const port = window.location.port;
+		const portSuffix =
+			(domain === "localhost" || domain.endsWith(".localhost")) && port
+				? `:${port}`
+				: "";
+
+		return `${protocol}//${domain}${portSuffix}`;
+	}
+
+	return (
+		<div className="grid gap-4 xl:grid-cols-[22rem_1fr]">
+			<Card>
+				<CardHeader>
+					<CardTitle>Add Domain</CardTitle>
+					<CardDescription>
+						Add a subdomain or custom domain that should resolve to this tenant.
+					</CardDescription>
+					<CardAction>
+						<Globe2Icon className="size-4 text-muted-foreground" />
+					</CardAction>
+				</CardHeader>
+				<CardContent>
+					<form className="grid gap-3" onSubmit={handleAddDomain}>
+						<label className="grid gap-1.5">
+							<span className="font-medium text-xs">
+								{type === "SUBDOMAIN" ? "Subdomain name" : "Domain"}
+							</span>
+							{type === "SUBDOMAIN" ? (
+								<div className="grid grid-cols-[1fr_auto]">
+									<Input
+										className="border-r-0"
+										placeholder="club"
+										required
+										type="text"
+										value={domain}
+										onChange={(event) => setDomain(event.target.value)}
+									/>
+									<div className="flex h-8 items-center border border-input bg-muted/30 px-2.5 text-muted-foreground text-xs">
+										.{rootDomain || "ROOT_DOMAIN"}
+									</div>
+								</div>
+							) : (
+								<Input
+									placeholder="club.example.com"
+									required
+									type="text"
+									value={domain}
+									onChange={(event) => setDomain(event.target.value)}
+								/>
+							)}
+						</label>
+						<label className="grid gap-1.5">
+							<span className="font-medium text-xs">Type</span>
+							<select
+								className="h-8 w-full min-w-0 rounded-none border border-input bg-background px-2.5 py-1 text-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
+								value={type}
+								onChange={(event) => setType(event.target.value as DomainType)}
+							>
+								<option value="SUBDOMAIN">Subdomain</option>
+								<option value="CUSTOM">Custom domain</option>
+							</select>
+						</label>
+						<div className="text-muted-foreground text-xs">
+							Will save as{" "}
+							<span className="font-medium text-foreground">{domainPreview}</span>
+						</div>
+						{type === "SUBDOMAIN" && !rootDomain ? (
+							<div className="text-destructive text-xs">
+								Configure ROOT_DOMAIN before adding production subdomains.
+							</div>
+						) : null}
+						<Button disabled={addDomain.isPending || !canAddSubdomain} type="submit">
+							<Globe2Icon className="size-4" />
+							{addDomain.isPending ? "Adding" : "Add domain"}
+						</Button>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Domains</CardTitle>
+					<CardDescription>
+						Domains route requests to this tenant. Verification status is stored
+						for future DNS checks.
+					</CardDescription>
+					<CardAction>
+						<Globe2Icon className="size-4 text-muted-foreground" />
+					</CardAction>
+				</CardHeader>
+				<CardContent className="px-0">
+					<div className="grid border-y bg-muted/30 px-4 py-2 font-medium text-muted-foreground text-xs md:grid-cols-[1fr_8rem_8rem_7rem]">
+						<span>Domain</span>
+						<span className="hidden md:block">Type</span>
+						<span className="hidden md:block">Status</span>
+						<span className="hidden text-right md:block">Actions</span>
+					</div>
+					{settings.isLoading ? (
+						<div className="px-4 py-6 text-muted-foreground text-sm">
+							Loading domains
+						</div>
+					) : settings.data?.domains.length ? (
+						<div className="divide-y">
+							{settings.data.domains.map((item) => (
+								<div
+									className="grid gap-3 px-4 py-3 md:grid-cols-[1fr_8rem_8rem_7rem] md:items-center"
+									key={item.id}
+								>
+									<div className="min-w-0">
+										<div className="truncate font-medium text-sm">
+											{item.domain}
+										</div>
+										<div className="text-muted-foreground text-xs md:hidden">
+											{item.type === "SUBDOMAIN" ? "Subdomain" : "Custom"} ·{" "}
+											{domainStatus(item)}
+										</div>
+										{domainStatus(item) === "Local" ? (
+											<div className="truncate text-muted-foreground text-xs">
+												{domainHref(item.domain)}
+											</div>
+										) : null}
+									</div>
+									<div className="hidden text-xs md:block">
+										{item.type === "SUBDOMAIN" ? "Subdomain" : "Custom"}
+									</div>
+									<div className="hidden text-xs md:block">
+										{domainStatus(item)}
+									</div>
+									<div className="flex justify-end gap-2">
+										<a
+											aria-label={`Open ${item.domain}`}
+											className="inline-flex size-7 shrink-0 items-center justify-center border border-border text-xs transition-colors hover:bg-muted hover:text-foreground"
+											href={domainHref(item.domain)}
+											rel="noreferrer"
+											target="_blank"
+										>
+											<ExternalLinkIcon className="size-4" />
+										</a>
+										<Button
+											aria-label={`Remove ${item.domain}`}
+											disabled={removeDomain.isPending}
+											size="icon-sm"
+											type="button"
+											variant="destructive"
+											onClick={() => removeDomain.mutate({ domainId: item.id })}
+										>
+											<Trash2Icon className="size-4" />
+										</Button>
+									</div>
+								</div>
+							))}
+						</div>
+					) : (
+						<div className="px-4 py-6 text-muted-foreground text-sm">
+							No domains added yet.
+						</div>
+					)}
+				</CardContent>
+			</Card>
+		</div>
 	);
 }
 
@@ -172,7 +633,9 @@ function MembersPanel({
 	}
 
 	const addMember = useMutation(
-		trpc.tenant.addMember.mutationOptions({
+		{
+			mutationFn: (input: { email: string; role: TenantRole }) =>
+				trpcClient.tenant.addMember.mutate(input),
 			onSuccess: async () => {
 				toast.success("Member access updated");
 				setEmail("");
@@ -180,30 +643,34 @@ function MembersPanel({
 				await refreshUsers();
 			},
 			onError: (error) => toast.error(error.message),
-		}),
+		},
 	);
 
 	const updateRole = useMutation(
-		trpc.tenant.updateMemberRole.mutationOptions({
+		{
+			mutationFn: (input: { memberId: string; role: TenantRole }) =>
+				trpcClient.tenant.updateMemberRole.mutate(input),
 			onSuccess: async () => {
 				toast.success("Role updated");
 				await refreshUsers();
 			},
 			onError: (error) => toast.error(error.message),
-		}),
+		},
 	);
 
 	const removeMember = useMutation(
-		trpc.tenant.removeMember.mutationOptions({
+		{
+			mutationFn: (input: { memberId: string }) =>
+				trpcClient.tenant.removeMember.mutate(input),
 			onSuccess: async (result) => {
 				toast.success(result.removed ? "Member removed" : "Member was already removed");
 				await refreshUsers();
 			},
 			onError: (error) => toast.error(error.message),
-		}),
+		},
 	);
 
-	function handleAddMember(event: React.FormEvent) {
+	function handleAddMember(event: FormEvent) {
 		event.preventDefault();
 		addMember.mutate({ email, role });
 	}

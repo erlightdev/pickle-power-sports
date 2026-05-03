@@ -131,20 +131,20 @@ const data = {
 		},
 		{
 			title: "Settings",
-			url: "/team",
+			url: "/team#members",
 			icon: <Settings2Icon />,
 			items: [
 				{
 					title: "Tenant",
-					url: "#tenant",
+					url: "/team#tenant",
 				},
 				{
 					title: "Members",
-					url: "/team",
+					url: "/team#members",
 				},
 				{
 					title: "Domains",
-					url: "#domains",
+					url: "/team#domains",
 				},
 			],
 		},

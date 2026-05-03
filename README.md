@@ -32,6 +32,7 @@ Focused backend guides:
 - `docs/local-development.md`
 - `docs/api.md`
 - `docs/auth-rbac.md`
+- `docs/admin-settings.md`
 - `docs/tenancy.md`
 - `docs/database.md`
 - `docs/echoapi.md`

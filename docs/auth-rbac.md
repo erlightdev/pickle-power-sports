@@ -66,3 +66,7 @@ Normal users must have a `TenantMember` row for the active tenant before they ca
 - A tenant must always keep at least one owner.
 - Users cannot remove their own tenant membership.
 - Tenant slug changes require owner access.
+
+## Admin UI
+
+Tenant, member, and domain management are documented in `docs/admin-settings.md`.

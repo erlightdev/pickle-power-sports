@@ -1,9 +1,9 @@
 import type { AppRouter } from "@Pickle-Power-Sports/api/routers/index";
-import { env } from "@Pickle-Power-Sports/env/web";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import { toast } from "sonner";
+import { getServerUrl } from "@/lib/server-url";
 
 export const queryClient = new QueryClient({
 	queryCache: new QueryCache({
@@ -21,7 +21,7 @@ export const queryClient = new QueryClient({
 export const trpcClient = createTRPCClient<AppRouter>({
 	links: [
 		httpBatchLink({
-			url: `${env.VITE_SERVER_URL}/trpc`,
+			url: `${getServerUrl()}/trpc`,
 			fetch(url, options) {
 				return fetch(url, {
 					...options,

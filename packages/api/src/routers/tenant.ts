@@ -11,6 +11,37 @@ import {
 import { slugify } from "../lib/inputs";
 
 const tenantRoleInput = z.enum(tenantRoles);
+const domainTypeInput = z.enum(["SUBDOMAIN", "CUSTOM"]);
+
+function rootDomain() {
+	return process.env.ROOT_DOMAIN ?? (process.env.NODE_ENV === "production" ? null : "localhost");
+}
+
+function normalizeTenantDomain(domain: string, type: "SUBDOMAIN" | "CUSTOM") {
+	const value = domain.trim().toLowerCase();
+
+	if (type === "CUSTOM") {
+		return value.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+	}
+
+	const label = slugify(value.split(".")[0] ?? "");
+	if (!label) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "Subdomain name is required",
+		});
+	}
+
+	const configuredRootDomain = rootDomain();
+	if (!configuredRootDomain) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "ROOT_DOMAIN must be configured before adding subdomains",
+		});
+	}
+
+	return `${label}.${configuredRootDomain}`;
+}
 
 function assertCanAssignRole(currentRole: TenantRole, nextRole: TenantRole) {
 	if (currentRole === "OWNER") {
@@ -33,6 +64,19 @@ export const tenantRouter = router({
 		user: ctx.user,
 		membership: ctx.tenantMembership,
 	})),
+
+	settings: tenantRoleProcedure(tenantAdminRoles).query(async ({ ctx }) => {
+		const tenant = await ctx.prisma.tenant.findUnique({
+			where: { id: ctx.tenant.id },
+			include: {
+				domains: {
+					orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+				},
+			},
+		});
+
+		return tenant ? { ...tenant, rootDomain: rootDomain() } : null;
+	}),
 
 	listMyTenants: protectedProcedure.query(async ({ ctx }) => {
 		const user = await ctx.prisma.user.findUnique({
@@ -301,16 +345,46 @@ export const tenantRouter = router({
 		.input(
 			z.object({
 				domain: z.string().trim().min(3),
-				type: z.enum(["SUBDOMAIN", "CUSTOM"]),
+				type: domainTypeInput,
 			}),
 		)
-		.mutation(({ ctx, input }) =>
-			ctx.prisma.tenantDomain.create({
+		.mutation(async ({ ctx, input }) => {
+			const normalizedDomain = normalizeTenantDomain(input.domain, input.type);
+			const existing = await ctx.prisma.tenantDomain.findUnique({
+				where: { domain: normalizedDomain },
+			});
+
+			if (existing) {
+				throw new TRPCError({
+					code: "CONFLICT",
+					message: "Domain is already in use",
+				});
+			}
+
+			return ctx.prisma.tenantDomain.create({
 				data: {
 					tenantId: ctx.tenant.id,
-					domain: input.domain.toLowerCase(),
+					domain: normalizedDomain,
 					type: input.type,
 				},
-			}),
-		),
+			});
+		}),
+
+	removeDomain: tenantRoleProcedure(tenantAdminRoles)
+		.input(z.object({ domainId: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const domain = await ctx.prisma.tenantDomain.findFirst({
+				where: {
+					id: input.domainId,
+					tenantId: ctx.tenant.id,
+				},
+			});
+
+			if (!domain) {
+				return { removed: false };
+			}
+
+			await ctx.prisma.tenantDomain.delete({ where: { id: domain.id } });
+			return { removed: true };
+		}),
 });

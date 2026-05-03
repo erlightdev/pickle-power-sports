@@ -24,6 +24,53 @@ function tenantNameFromSlug(slug: string) {
 		.join(" ");
 }
 
+function rootDomain() {
+	return process.env.ROOT_DOMAIN ?? (process.env.NODE_ENV === "production" ? null : "localhost");
+}
+
+function isAllowedCorsOrigin(origin: string | undefined) {
+	if (!origin) {
+		return false;
+	}
+
+	if (origin === env.CORS_ORIGIN) {
+		return true;
+	}
+
+	if (env.NODE_ENV === "production") {
+		return false;
+	}
+
+	try {
+		const url = new URL(origin);
+		return (
+			url.protocol === "http:" &&
+			url.port === "3001" &&
+			(url.hostname === "localhost" || url.hostname.endsWith(".localhost"))
+		);
+	} catch {
+		return false;
+	}
+}
+
+async function resolveTenantDomain(host: string): Promise<TenantContext> {
+	const tenantDomain = await prisma.tenantDomain.findUnique({
+		where: { domain: host },
+		include: { tenant: true },
+	});
+
+	if (!tenantDomain || tenantDomain.tenant.status !== "ACTIVE") {
+		return null;
+	}
+
+	return {
+		id: tenantDomain.tenant.id,
+		name: tenantDomain.tenant.name,
+		slug: tenantDomain.tenant.slug,
+		status: tenantDomain.tenant.status,
+	};
+}
+
 async function resolveTenant(
 	hostHeader: string | undefined,
 	tenantSlugHeader: string | undefined,
@@ -34,7 +81,12 @@ async function resolveTenant(
 		return null;
 	}
 
-	const rootDomain = process.env.ROOT_DOMAIN ?? "picklepowersports.com";
+	const mappedTenant = await resolveTenantDomain(host);
+	if (mappedTenant) {
+		return mappedTenant;
+	}
+
+	const appRootDomain = rootDomain();
 	const defaultTenantSlug =
 		process.env.DEFAULT_TENANT_SLUG ?? "picklepowersports";
 	const isProduction = process.env.NODE_ENV === "production";
@@ -50,10 +102,10 @@ async function resolveTenant(
 		tenantSlug = tenantSlugHeader.toLowerCase();
 	} else if (localHosts.has(host) || host.endsWith(".localhost")) {
 		tenantSlug = defaultTenantSlug;
-	} else if (host === rootDomain || host === `www.${rootDomain}`) {
+	} else if (appRootDomain && (host === appRootDomain || host === `www.${appRootDomain}`)) {
 		tenantSlug = defaultTenantSlug;
-	} else if (host.endsWith(`.${rootDomain}`)) {
-		tenantSlug = host.replace(`.${rootDomain}`, "");
+	} else if (appRootDomain && host.endsWith(`.${appRootDomain}`)) {
+		tenantSlug = host.replace(`.${appRootDomain}`, "");
 	} else {
 		customDomain = host;
 	}
@@ -93,21 +145,7 @@ async function resolveTenant(
 		return null;
 	}
 
-	const tenantDomain = await prisma.tenantDomain.findUnique({
-		where: { domain: customDomain },
-		include: { tenant: true },
-	});
-
-	if (!tenantDomain || tenantDomain.tenant.status !== "ACTIVE") {
-		return null;
-	}
-
-	return {
-		id: tenantDomain.tenant.id,
-		name: tenantDomain.tenant.name,
-		slug: tenantDomain.tenant.slug,
-		status: tenantDomain.tenant.status,
-	};
+	return resolveTenantDomain(customDomain);
 }
 
 app.use(logger());
@@ -115,7 +153,7 @@ app.use(secureHeaders());
 app.use(
 	"/*",
 	cors({
-		origin: env.CORS_ORIGIN,
+		origin: (origin) => (isAllowedCorsOrigin(origin) ? origin : ""),
 		allowMethods: ["GET", "POST", "OPTIONS"],
 		allowHeaders: ["Content-Type", "Authorization", "X-Tenant-Slug"],
 		credentials: true,
