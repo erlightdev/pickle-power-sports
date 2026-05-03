@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { ModeToggle } from "@/components/mode-toggle";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 
@@ -112,6 +113,9 @@ function RouteComponent() {
 							</BreadcrumbItem>
 						</BreadcrumbList>
 					</Breadcrumb>
+					<div className="ml-auto">
+						<ModeToggle />
+					</div>
 				</header>
 
 				<main className="flex flex-1 flex-col gap-6 p-4 lg:p-6">

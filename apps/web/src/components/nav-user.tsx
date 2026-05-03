@@ -18,6 +18,7 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@Pickle-Power-Sports/ui/components/sidebar";
+import { useNavigate } from "@tanstack/react-router";
 import {
 	BadgeCheckIcon,
 	BellIcon,
@@ -26,6 +27,9 @@ import {
 	LogOutIcon,
 	ShieldCheckIcon,
 } from "lucide-react";
+import { toast } from "sonner";
+
+import { authClient } from "@/lib/auth-client";
 
 function getInitials(name: string) {
 	return name
@@ -46,6 +50,7 @@ export function NavUser({
 	};
 }) {
 	const { isMobile } = useSidebar();
+	const navigate = useNavigate();
 	const initials = getInitials(user.name) || "PP";
 
 	return (
@@ -110,7 +115,18 @@ export function NavUser({
 							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
-						<DropdownMenuItem>
+						<DropdownMenuItem
+							onClick={() =>
+								authClient.signOut({
+									fetchOptions: {
+										onSuccess: () => {
+											toast.success("Signed out successfully");
+											navigate({ to: "/login" });
+										},
+									},
+								})
+							}
+						>
 							<LogOutIcon />
 							Log out
 						</DropdownMenuItem>
