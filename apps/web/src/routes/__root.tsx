@@ -45,6 +45,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 function RootComponent() {
 	const location = useLocation();
 	const hideHeader =
+		location.pathname === "/" ||
 		location.pathname.startsWith("/dashboard") ||
 		location.pathname.startsWith("/team") ||
 		location.pathname.startsWith("/profile") ||
@@ -65,7 +66,13 @@ function RootComponent() {
 			>
 				<TooltipProvider>
 					<div
-						className={hideHeader ? "h-svh" : "grid h-svh grid-rows-[auto_1fr]"}
+						className={
+						location.pathname === "/"
+							? "min-h-dvh"
+							: hideHeader
+								? "h-svh"
+								: "grid h-svh grid-rows-[auto_1fr]"
+					}
 					>
 						{hideHeader ? null : <Header />}
 						<Outlet />
