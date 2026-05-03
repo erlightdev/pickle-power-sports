@@ -43,6 +43,37 @@ function normalizeTenantDomain(domain: string, type: "SUBDOMAIN" | "CUSTOM") {
 	return `${label}.${configuredRootDomain}`;
 }
 
+function tenantNameFromSlug(slug: string) {
+	return slug
+		.split("-")
+		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+		.join(" ");
+}
+
+function tenantSlugFromHost(host: string | null) {
+	if (!host) {
+		return null;
+	}
+
+	const configuredRootDomain = rootDomain();
+	const normalizedHost = host.toLowerCase();
+
+	if (process.env.NODE_ENV !== "production" && normalizedHost.endsWith(".localhost")) {
+		return slugify(normalizedHost.replace(".localhost", ""));
+	}
+
+	if (
+		configuredRootDomain &&
+		normalizedHost !== configuredRootDomain &&
+		normalizedHost !== `www.${configuredRootDomain}` &&
+		normalizedHost.endsWith(`.${configuredRootDomain}`)
+	) {
+		return slugify(normalizedHost.replace(`.${configuredRootDomain}`, ""));
+	}
+
+	return null;
+}
+
 function assertCanAssignRole(currentRole: TenantRole, nextRole: TenantRole) {
 	if (currentRole === "OWNER") {
 		return;
@@ -98,7 +129,21 @@ export const tenantRouter = router({
 	}),
 
 	joinCurrent: protectedProcedure.mutation(async ({ ctx }) => {
-		if (!ctx.tenant) {
+		const hostTenantSlug = tenantSlugFromHost(ctx.requestHost);
+		const tenant =
+			ctx.tenant ??
+			(hostTenantSlug
+				? await ctx.prisma.tenant.upsert({
+						where: { slug: hostTenantSlug },
+						update: {},
+						create: {
+							name: tenantNameFromSlug(hostTenantSlug),
+							slug: hostTenantSlug,
+						},
+					})
+				: null);
+
+		if (!tenant) {
 			throw new TRPCError({
 				code: "BAD_REQUEST",
 				message: "Tenant not found",
@@ -108,7 +153,7 @@ export const tenantRouter = router({
 		const existing = await ctx.prisma.tenantMember.findUnique({
 			where: {
 				tenantId_userId: {
-					tenantId: ctx.tenant.id,
+					tenantId: tenant.id,
 					userId: ctx.session.user.id,
 				},
 			},
@@ -123,7 +168,7 @@ export const tenantRouter = router({
 		}
 
 		const memberCount = await ctx.prisma.tenantMember.count({
-			where: { tenantId: ctx.tenant.id },
+			where: { tenantId: tenant.id },
 		});
 
 		if (memberCount > 0) {
@@ -136,7 +181,7 @@ export const tenantRouter = router({
 
 		return ctx.prisma.tenantMember.create({
 			data: {
-				tenantId: ctx.tenant.id,
+				tenantId: tenant.id,
 				userId: ctx.session.user.id,
 				role: "OWNER",
 			},

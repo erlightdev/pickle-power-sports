@@ -17,7 +17,7 @@ Tenant resolution happens in `apps/server/src/index.ts`.
 
 ## Local Tenant Behavior
 
-On local requests, the server upserts the default tenant automatically. This makes local development smoother because public tenant-scoped APIs work immediately.
+On local root requests, the server upserts the default tenant automatically. On `*.localhost` requests, the subdomain is treated as the tenant slug. This makes subdomain testing work locally.
 
 Non-default tenants must be created explicitly.
 

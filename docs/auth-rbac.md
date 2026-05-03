@@ -55,7 +55,7 @@ Normal users must have a `TenantMember` row for the active tenant before they ca
 ## Tenant Membership Flow
 
 1. User signs up or signs in through Better Auth.
-2. App calls `tenant.joinCurrent` for the active tenant only during tenant bootstrap.
+2. After registration email verification, the app calls `tenant.joinCurrent` for the active tenant.
 3. If the tenant has no members yet, the first member becomes `OWNER`.
 4. After the first owner exists, tenant membership is invite-only through admin-managed APIs.
 5. Tenant owners/admins manage members through `tenant.listMembers`, `tenant.addMember`, `tenant.updateMemberRole`, and `tenant.removeMember`.

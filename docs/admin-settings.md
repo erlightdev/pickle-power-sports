@@ -105,6 +105,44 @@ Safety rules:
 - Users cannot remove their own tenant membership.
 - Platform admins do not need a `tenant_member` row to access tenant admin actions.
 
+## First User Bootstrap
+
+When a user registers from a tenant subdomain, the web app calls `tenant.joinCurrent` after email verification.
+
+If the tenant has no members yet:
+
+- The tenant membership row is created.
+- The registering user becomes `OWNER`.
+
+If the tenant already has members:
+
+- New users are not auto-promoted.
+- Tenant access remains invite-only through the Members section.
+
+In local development, `*.localhost` hosts resolve to tenant slugs. For example:
+
+```text
+club.localhost
+```
+
+uses the tenant slug:
+
+```text
+club
+```
+
+In production, subdomain bootstrap requires `ROOT_DOMAIN` so a host like:
+
+```text
+club.yourdomain.com
+```
+
+can resolve the tenant slug:
+
+```text
+club
+```
+
 ## Domains Section
 
 The Domains section manages domains that resolve to the current tenant.

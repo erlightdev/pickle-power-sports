@@ -12,6 +12,7 @@ import { useId, useState } from "react"
 import { toast } from "sonner"
 
 import { authClient } from "@/lib/auth-client"
+import { trpcClient } from "@/utils/trpc"
 
 type Step = "register" | "verify"
 
@@ -70,6 +71,11 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
 			toast.error(error.message || "Invalid or expired code")
 			setIsLoading(false)
 		} else {
+			try {
+				await trpcClient.tenant.joinCurrent.mutate()
+			} catch {
+				// Existing tenants are invite-only after the first owner is created.
+			}
 			toast.success("Email verified — welcome!")
 			navigate({ to: "/dashboard" })
 		}

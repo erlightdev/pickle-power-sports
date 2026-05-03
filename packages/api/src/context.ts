@@ -34,6 +34,7 @@ export async function createContext({ context }: CreateContextOptions) {
 		prisma,
 		session,
 		tenant,
+		requestHost: context.req.header("host")?.split(":")[0]?.toLowerCase() ?? null,
 	};
 }
 

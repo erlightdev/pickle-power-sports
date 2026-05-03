@@ -100,8 +100,10 @@ async function resolveTenant(
 		(localHosts.has(host) || host.endsWith(".localhost"))
 	) {
 		tenantSlug = tenantSlugHeader.toLowerCase();
-	} else if (localHosts.has(host) || host.endsWith(".localhost")) {
+	} else if (localHosts.has(host)) {
 		tenantSlug = defaultTenantSlug;
+	} else if (!isProduction && host.endsWith(".localhost")) {
+		tenantSlug = host.replace(".localhost", "");
 	} else if (appRootDomain && (host === appRootDomain || host === `www.${appRootDomain}`)) {
 		tenantSlug = defaultTenantSlug;
 	} else if (appRootDomain && host.endsWith(`.${appRootDomain}`)) {
@@ -116,7 +118,7 @@ async function resolveTenant(
 
 	if (tenantSlug) {
 		const tenant =
-			!isProduction && tenantSlug === defaultTenantSlug
+			!isProduction
 				? await prisma.tenant.upsert({
 						where: { slug: tenantSlug },
 						update: {},
